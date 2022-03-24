@@ -18,15 +18,15 @@ type LoginCredentials struct {
 }
 
 func (bsRef *Bigscreen) login() {
-	ctx := *bsRef
-	reqBody := fmt.Sprintf(`{"email":"%s", "password": "%s"}`, ctx.Credentials.Email, ctx.Credentials.Password)
+	bs := *bsRef
+	reqBody := fmt.Sprintf(`{"email":"%s", "password": "%s"}`, bs.Credentials.Email, bs.Credentials.Password)
 
 	_, resp := bsRef.request(
-		ctx.HostAccounts+"/login",
+		bs.HostAccounts+"/login",
 		"POST",
 		map[string]string{
 			"content-type":            "application/json",
-			"x-bigscreen-system-info": base64.StdEncoding.EncodeToString([]byte(ctx.DeviceInfo)),
+			"x-bigscreen-system-info": base64.StdEncoding.EncodeToString([]byte(bs.DeviceInfo)),
 		},
 		reqBody,
 	)
@@ -36,14 +36,14 @@ func (bsRef *Bigscreen) login() {
 }
 
 func (bsRef *Bigscreen) verify() {
-	ctx := *bsRef
+	bs := *bsRef
 
-	if ctx.JWT.Refresh == "" {
+	if bs.JWT.Refresh == "" {
 		bsRef.login()
 	}
 
 	respBody, resp := bsRef.request(
-		ctx.HostAccounts+"/verify",
+		bs.HostAccounts+"/verify",
 		"GET",
 		make(map[string]string),
 		"",
@@ -57,13 +57,13 @@ func (bsRef *Bigscreen) verify() {
 }
 
 func (bsRef *Bigscreen) renew(nonce string) {
-	ctx := *bsRef
+	bs := *bsRef
 	respBody, resp := bsRef.request(
-		ctx.HostAccounts+"/renew",
+		bs.HostAccounts+"/renew",
 		"GET",
 		map[string]string{
-			"x-bigscreen-system-info": base64.StdEncoding.EncodeToString([]byte(ctx.DeviceInfo)),
-			"x-refresh-token":         ctx.JWT.Refresh,
+			"x-bigscreen-system-info": base64.StdEncoding.EncodeToString([]byte(bs.DeviceInfo)),
+			"x-refresh-token":         bs.JWT.Refresh,
 			"x-bigscreen-nonce":       nonce,
 		},
 		"",

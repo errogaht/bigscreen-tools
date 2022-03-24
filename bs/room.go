@@ -57,7 +57,7 @@ type Room struct {
 
 func (bsRef *Bigscreen) GetRooms() (listOfRooms []Room) {
 	body, _ := bsRef.request(
-		bsRef.HostAccounts+"/rooms/latest",
+		(*bsRef).HostRealtime+"/rooms/latest",
 		"GET",
 		make(map[string]string),
 		"",
@@ -101,7 +101,7 @@ func (bsRef *Bigscreen) PrintOnlineRooms() {
 func (bsRef *Bigscreen) Participants(roomId string) (room Room) {
 	bsRef.verify()
 	body, _ := bsRef.request(
-		bsRef.HostAccounts+"/room/"+roomId,
+		(*bsRef).HostRealtime+"/room/"+roomId,
 		"GET",
 		make(map[string]string),
 		"",
@@ -118,7 +118,7 @@ func (bsRef *Bigscreen) Participants(roomId string) (room Room) {
 func (bsRef *Bigscreen) LeaveRoom() {
 	bsRef.verify()
 	bsRef.request(
-		bsRef.HostAccounts+"/leave_room",
+		(*bsRef).HostRealtime+"/leave_room",
 		"GET",
 		make(map[string]string),
 		"",
