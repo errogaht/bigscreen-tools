@@ -35,7 +35,7 @@ func (bsRef *Bigscreen) login() {
 	(*bsRef).JWT.Refresh = resp.Header.Get("x-refresh-token")
 }
 
-func (bsRef *Bigscreen) verify() {
+func (bsRef *Bigscreen) Verify() {
 	bs := *bsRef
 
 	if bs.JWT.Refresh == "" {
@@ -51,7 +51,7 @@ func (bsRef *Bigscreen) verify() {
 	_ = len(respBody)
 	if resp.StatusCode == 401 {
 		bsRef.renew(resp.Header.Get("x-bigscreen-nonce"))
-		bsRef.verify()
+		bsRef.Verify()
 	}
 
 }

@@ -4,58 +4,88 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sort"
+	"strings"
+	"time"
 )
 
+type Timestamp struct {
+	Seconds     int64 `json:"_seconds"`
+	Nanoseconds int64 `json:"_nanoseconds"`
+}
+
 type RoomCreator struct {
-	IsMod   bool
-	IsStaff bool
+	UserSessionId string
+	IsMod         bool
+	IsStaff       bool
 }
 
 type AccountProfile struct {
-	Username   string
-	IsBanned   bool
-	IsStaff    bool
-	IsVerified bool
+	CreatedAtTimestamp Timestamp `json:"createdAt"`
+	CreatedAt          time.Time
+	IsVerified         bool
+	IsBanned           bool
+	IsStaff            bool
+	Username           string
+	SteamProfile       SteamProfile
+	OculusProfile      OculusProfile
 }
-
-type RoomRemoteUsers struct {
+type OculusProfile struct {
+	OculusId            string
+	OculusImageURL      string
+	OculusSmallImageURL string
+}
+type SteamProfile struct {
+	Id                       string `json:"steamid"`
+	CommunityVisibilityState uint8  `json:"communityvisibilitystate"`
+	ProfileState             uint8  `json:"profilestate"`
+	PersonaName              string `json:"personaname"`
+	ProfileUrl               string `json:"profileurl"`
+	Avatar                   string `json:"avatar"`
+	AvatarMedium             string `json:"avatarmedium"`
+	AvatarFull               string `json:"avatarfull"`
+	AvatarHash               string `json:"avatarhash"`
+	PersonaState             uint8  `json:"personastate"`
+	RealName                 string `json:"realname"`
+	PrimaryClanId            string `json:"primaryclanid"`
+	TimeCreated              uint64 `json:"timecreated"`
+	CreatedAt                time.Time
+	PersonaStateFlags        uint16 `json:"personastateflags"`
+	LocCountryCode           string `json:"loccountrycode"`
+}
+type RoomUser struct {
 	IsAdmin        bool
 	IsMod          bool
 	IsStaff        bool
+	Version        string
+	UserSessionId  string
+	LegacyUserId   string
 	SeatIndex      uint8
+	CreatedAt      time.Time
 	AccountProfile AccountProfile
 }
-
-type RoomCreatorProfileOculusProfile struct {
-	OculusId       string
-	OculusImageURL string
-}
-type RoomCreatorProfile struct {
-	Username      string
-	IsMod         bool
-	IsStaff       bool
-	IsVerified    bool
-	OculusProfile RoomCreatorProfileOculusProfile
-}
 type Room struct {
-	Name           string
 	Creator        RoomCreator
-	CreatorProfile RoomCreatorProfile
+	CreatorProfile AccountProfile
+	Name           string
 	Description    string
 	Category       string
 	Environment    string
-	Visibility     string
-	RoomType       string
-	InviteCode     string
-	CreatedAt      string
-	RoomId         string
 	Size           uint8
+	Version        string
+	RoomType       string
+	Visibility     string
+	InviteCode     string
+	Status         string
+	RemoteUsers    []RoomUser
 	Participants   uint8
-	RemoteUsers    []RoomRemoteUsers
+	CreatedAt      time.Time
+	RoomId         string
+	Id             string
 }
 
-func (bsRef *Bigscreen) GetRooms() (listOfRooms []Room) {
+func (bsRef *Bigscreen) GetRooms() (rooms []Room) {
 	body, _ := bsRef.request(
 		(*bsRef).HostRealtime+"/rooms/latest",
 		"GET",
@@ -63,15 +93,28 @@ func (bsRef *Bigscreen) GetRooms() (listOfRooms []Room) {
 		"",
 	)
 
-	err := json.Unmarshal(body, &listOfRooms)
+	err := json.Unmarshal(body, &rooms)
 	if err != nil {
 		log.Panic(err.Error())
 	}
-
+	for i := range rooms {
+		r := &rooms[i]
+		r.Id = strings.Split(r.RoomId, ":")[1]
+		r.CreatorProfile.CreatedAt = time.Unix(r.CreatorProfile.CreatedAtTimestamp.Seconds, r.CreatorProfile.CreatedAtTimestamp.Nanoseconds)
+	}
 	return
 }
 
-func (bsRef *Bigscreen) PrintOnlineRooms() {
+func getMsgTemplate() string {
+	content, err := os.ReadFile("roomsMsgTemplate.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(content)
+}
+
+func (bsRef *Bigscreen) GetOnlineRooms() string {
 	listOfRooms := bsRef.GetRooms()
 
 	sort.SliceStable(listOfRooms, func(i, j int) bool {
@@ -82,26 +125,32 @@ func (bsRef *Bigscreen) PrintOnlineRooms() {
 		return listOfRooms[i].Category < listOfRooms[j].Category
 	})
 
+	var result string
+	//9.   CHAT -  5/15 - Steve's Place 21               | U:Steve_               Music
 	for i, room := range listOfRooms {
 		i++
-		fmt.Printf(
-			"%2d. %6v - %2d/%2d - %-30s | U:%-20s %s %s\n",
-			i,
+		result += fmt.Sprintf("%d. %s", i, room.Name)
+		if room.Description != "" {
+			result += " (" + room.Description + ")"
+		}
+		result += "\n"
+
+		result += fmt.Sprintf(
+			"%s - %d/%d %s\n\n",
 			room.Category,
 			room.Participants,
 			room.Size,
-			room.Name,
 			room.CreatorProfile.Username,
-			room.Description,
-			room.RoomId,
+			//room.Id,
 		)
 	}
+
+	return result
 }
 
-func (bsRef *Bigscreen) Participants(roomId string) (room Room) {
-	bsRef.verify()
+func (bsRef *Bigscreen) GetRoom(roomId string) (room Room) {
 	body, _ := bsRef.request(
-		(*bsRef).HostRealtime+"/room/"+roomId,
+		(*bsRef).HostRealtime+"/room/room:"+roomId,
 		"GET",
 		make(map[string]string),
 		"",
@@ -111,12 +160,14 @@ func (bsRef *Bigscreen) Participants(roomId string) (room Room) {
 	if err != nil {
 		log.Panic(err.Error())
 	}
-
+	for i := range room.RemoteUsers {
+		u := &room.RemoteUsers[i]
+		u.AccountProfile.CreatedAt = time.Unix(u.AccountProfile.CreatedAtTimestamp.Seconds, u.AccountProfile.CreatedAtTimestamp.Nanoseconds)
+	}
 	return
 }
 
 func (bsRef *Bigscreen) LeaveRoom() {
-	bsRef.verify()
 	bsRef.request(
 		(*bsRef).HostRealtime+"/leave_room",
 		"GET",

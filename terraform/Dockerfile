@@ -1,0 +1,2 @@
+FROM alpine:3
+ENV LOL=1
