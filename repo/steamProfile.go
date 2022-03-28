@@ -12,7 +12,7 @@ type SteamProfile struct {
 	Conn *pgx.Conn
 }
 
-func (repo *SteamProfile) InsertOrUpdate(profiles *[]*bs.SteamProfile) {
+func (repo *SteamProfile) InsertOrUpdate(profiles *[]bs.SteamProfile) {
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
 		batch.Queue(
@@ -26,13 +26,14 @@ func (repo *SteamProfile) InsertOrUpdate(profiles *[]*bs.SteamProfile) {
 	}
 
 	br := repo.Conn.SendBatch(context.Background(), batch)
+	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 	}
 }
 
-func (repo *SteamProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []*bs.SteamProfile) {
+func (repo *SteamProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []bs.SteamProfile) {
 	profilesSet := make(map[string]struct{})
 	for _, room := range *rooms {
 		p := &room.CreatorProfile.SteamProfile
@@ -43,7 +44,7 @@ func (repo *SteamProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []*bs.Stea
 			continue
 		}
 		profilesSet[p.Id] = struct{}{}
-		profiles = append(profiles, p)
+		profiles = append(profiles, *p)
 	}
 	return
 }

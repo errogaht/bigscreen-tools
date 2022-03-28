@@ -31,6 +31,7 @@ func (repo *Room) Insert(rooms *[]bs.Room) {
 	}
 
 	br := repo.Conn.SendBatch(context.Background(), batch)
+	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)

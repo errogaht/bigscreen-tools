@@ -12,7 +12,7 @@ type OculusProfile struct {
 	Conn *pgx.Conn
 }
 
-func (repo *OculusProfile) InsertOrUpdate(profiles *[]*bs.OculusProfile) {
+func (repo *OculusProfile) InsertOrUpdate(profiles *[]bs.OculusProfile) {
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
 		batch.Queue(
@@ -22,16 +22,18 @@ func (repo *OculusProfile) InsertOrUpdate(profiles *[]*bs.OculusProfile) {
 	}
 
 	br := repo.Conn.SendBatch(context.Background(), batch)
+	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 	}
 }
 
-func (repo *OculusProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []*bs.OculusProfile) {
+func (repo *OculusProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []bs.OculusProfile) {
 	profilesSet := make(map[string]struct{})
+	var p *bs.OculusProfile
 	for _, room := range *rooms {
-		p := &room.CreatorProfile.OculusProfile
+		p = &room.CreatorProfile.OculusProfile
 		if p.OculusId == "" {
 			continue
 		}
@@ -39,7 +41,7 @@ func (repo *OculusProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []*bs.Ocu
 			continue
 		}
 		profilesSet[p.OculusId] = struct{}{}
-		profiles = append(profiles, p)
+		profiles = append(profiles, *p)
 	}
 	return
 }

@@ -9,6 +9,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"log"
 	"os"
+	"time"
 )
 
 func getTelegramToken() string {
@@ -66,37 +67,44 @@ func main() {
 		DeviceInfo: fmt.Sprintf(`{"deviceUniqueIdentifier":"%s","drmSystem":"","version":"0.903.19.f05e4d-beta-class-beta","deviceName":"Oculus Quest 2","deviceModel":"Oculus Quest","operatingSystem":"Android OS 10 / API-29 (QQ3A.200805.001/22310100587300000)","CPU":"ARM64 FP ASIMD AES","memory":5842,"GPU":"Adreno (TM) 650"}`, os.Getenv("BS_DEVICE_ID")),
 	})
 
-	bigscreen.Verify()
-
 	var rooms []bs.Room
-
-	rooms = bigscreen.GetRooms()
-	//for i := range rooms {
-	//	room := &rooms[i]
-	//	rooms[i] = bigscreen.GetRoom(room.Id)
-	//}
-
-	//debug(rooms)
-
 	conn := getConn()
 	defer conn.Close(context.Background())
 
 	roomRepo := repo.Room{Conn: conn}
-
 	oculusProfilesRepo := repo.OculusProfile{Conn: conn}
-	oculusProfiles := oculusProfilesRepo.GetProfilesFrom(&rooms)
-	oculusProfilesRepo.InsertOrUpdate(&oculusProfiles)
-
 	steamProfilesRepo := repo.SteamProfile{Conn: conn}
-	steamProfiles := steamProfilesRepo.GetProfilesFrom(&rooms)
-	steamProfilesRepo.InsertOrUpdate(&steamProfiles)
-
 	accountProfilesRepo := repo.AccountProfile{Conn: conn}
-	creatorProfiles := accountProfilesRepo.GetCreatorProfilesFrom(&rooms)
-	accountProfilesRepo.InsertOrUpdate(&creatorProfiles)
 
-	roomRepo.DeleteAll()
-	roomRepo.Insert(&rooms)
+	for {
+		fmt.Println("---------------------------------------------")
+		fmt.Printf("%s: start\n", time.Now().Format("2006-01-02 15:04:05"))
+		bigscreen.Verify()
+		rooms = bigscreen.GetRooms()
+		fmt.Printf("%s: got %d rooms\n", time.Now().Format("2006-01-02 15:04:05"), len(rooms))
+		//for i := range rooms {
+		//	room := &rooms[i]
+		//	rooms[i] = bigscreen.GetRoom(room.Id)
+		//}
+
+		//debug(rooms)
+
+		oculusProfiles := oculusProfilesRepo.GetProfilesFrom(&rooms)
+		oculusProfilesRepo.InsertOrUpdate(&oculusProfiles)
+		fmt.Printf("%s: %d oculusProfiles upsert\n", time.Now().Format("2006-01-02 15:04:05"), len(oculusProfiles))
+
+		steamProfiles := steamProfilesRepo.GetProfilesFrom(&rooms)
+		steamProfilesRepo.InsertOrUpdate(&steamProfiles)
+		fmt.Printf("%s: %d steamProfiles upsert \n", time.Now().Format("2006-01-02 15:04:05"), len(steamProfiles))
+
+		creatorProfiles := accountProfilesRepo.GetCreatorProfilesFrom(&rooms)
+		accountProfilesRepo.InsertOrUpdate(&creatorProfiles)
+
+		roomRepo.DeleteAll()
+		roomRepo.Insert(&rooms)
+		fmt.Printf("%s: rooms refreshed \n", time.Now().Format("2006-01-02 15:04:05"))
+		time.Sleep(30 * time.Second)
+	}
 
 	//verify(bigscreen)
 	//menu()
