@@ -55,7 +55,7 @@ create table rooms
     environment  varchar                                    not null,
     category     varchar                                    not null,
     description  varchar                                    not null,
-    name         varchar                                    not null,
+    name         varchar                                    not null
 );
 
 create index rooms_category_index

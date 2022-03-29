@@ -1,9 +1,10 @@
 .env
 .idea
 go.sum
-/terraform/terraform.tfstate
-/terraform/terraform.tfstate.backup
-/terraform/.terraform.lock.hcl
-/terraform/.terraform
-/terraform/terraform.tfvars.json
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
+.terraform
+terraform.tfvars.json
 /tern.conf
+/images/roomloop/roomloop

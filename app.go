@@ -51,7 +51,11 @@ func getConn() *pgx.Conn {
 
 	return conn
 }
+func logM(m string) {
+	fmt.Printf("%s: %s\n", time.Now().Format("2006-01-02 15:04:05"), m)
+}
 func main() {
+	logM("start")
 	bigscreen := &(bs.Bigscreen{
 		JWT: bs.JWTToken{
 			Refresh: os.Getenv("BS_JWT_REFRESH"),
