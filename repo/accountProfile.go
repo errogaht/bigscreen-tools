@@ -2,9 +2,12 @@ package repo
 
 import (
 	"context"
+	sql2 "database/sql"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
+	"github.com/errogaht/bigscreen-tools/db"
 	"github.com/jackc/pgx/v4"
+	"log"
 	"os"
 )
 
@@ -12,7 +15,80 @@ type AccountProfile struct {
 	Conn *pgx.Conn
 }
 
-func (repo *AccountProfile) InsertOrUpdate(profiles *[]bs.AccountProfile) {
+func (repo *AccountProfile) getMetadata() *db.TableMetadata {
+	return &db.TableMetadata{
+		Name: "account_profiles",
+		Cols: []string{"username", "created_at", "is_verified", "is_banned", "is_staff", "steam_profile_id", "oculus_profile_id"},
+		PK:   "username",
+	}
+}
+
+func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
+	md := r.getMetadata()
+	sql := md.GetFindBySql(cond)
+	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	var rowSlice []bs.AccountProfile
+	var steamProfilesIds []interface{}
+	var oculusProfilesIds []interface{}
+	for rows.Next() {
+		var p bs.AccountProfile
+		var steamProfileId sql2.NullString
+		var oculusProfileId sql2.NullString
+		err := rows.Scan(&p.Username, &p.CreatedAt, &p.IsVerified, &p.IsBanned, &p.IsStaff, &steamProfileId, &oculusProfileId)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if steamProfileId.Valid {
+			steamProfilesIds = append(steamProfilesIds, steamProfileId.String)
+			p.SteamProfileId = steamProfileId.String
+		}
+
+		if oculusProfileId.Valid {
+			oculusProfilesIds = append(oculusProfilesIds, oculusProfileId.String)
+			p.OculusProfileId = oculusProfileId.String
+		}
+
+		rowSlice = append(rowSlice, p)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	oculusProfilesRepo := OculusProfile{Conn: r.Conn}
+	oculusProfiles := oculusProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
+	oculusProfilesById := make(map[string]*bs.OculusProfile)
+	for i := range *oculusProfiles {
+		profile := &(*oculusProfiles)[i]
+		oculusProfilesById[profile.Id] = profile
+	}
+
+	steamProfilesRepo := SteamProfile{Conn: r.Conn}
+	steamProfiles := steamProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(steamProfilesIds)), steamProfilesIds...)
+	steamProfilesById := make(map[string]*bs.SteamProfile)
+	for i := range *steamProfiles {
+		profile := &(*steamProfiles)[i]
+		steamProfilesById[profile.Id] = profile
+	}
+	for i := range rowSlice {
+		accProfileRef := &rowSlice[i]
+		if profile, ok := steamProfilesById[accProfileRef.SteamProfileId]; ok {
+			accProfileRef.SteamProfile = *profile
+		}
+		if profile, ok := oculusProfilesById[accProfileRef.OculusProfileId]; ok {
+			accProfileRef.OculusProfile = *profile
+		}
+	}
+
+	return &rowSlice
+}
+
+func (repo *AccountProfile) Upsert(profiles *[]bs.AccountProfile) {
+	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
 		var steamId interface{}
@@ -22,17 +98,13 @@ func (repo *AccountProfile) InsertOrUpdate(profiles *[]bs.AccountProfile) {
 		} else {
 			steamId = p.SteamProfile.Id
 		}
-		if p.OculusProfile.OculusId == "" {
+		if p.OculusProfile.Id == "" {
 			oculusId = nil
 		} else {
-			oculusId = p.OculusProfile.OculusId
+			oculusId = p.OculusProfile.Id
 		}
 		batch.Queue(
-			"insert into account_profiles "+
-				"(username, created_at, is_verified, is_banned, is_staff, steam_profile_id, oculus_profile_id) "+
-				"values($1, $2, $3, $4, $5, $6, $7) "+
-				"on conflict (username) do update set "+
-				"created_at = excluded.created_at, is_verified = excluded.is_verified, is_banned = excluded.is_banned, is_staff = excluded.is_staff, steam_profile_id = excluded.steam_profile_id, oculus_profile_id = excluded.oculus_profile_id",
+			md.GetUpsertSql(),
 			p.Username, p.CreatedAt, p.IsVerified, p.IsBanned, p.IsStaff, steamId, oculusId,
 		)
 	}
@@ -47,8 +119,8 @@ func (repo *AccountProfile) InsertOrUpdate(profiles *[]bs.AccountProfile) {
 
 func (repo *AccountProfile) GetCreatorProfilesFrom(rooms *[]bs.Room) (profiles []bs.AccountProfile) {
 	profilesSet := make(map[string]struct{})
-	for _, room := range *rooms {
-		p := &room.CreatorProfile
+	for i := range *rooms {
+		p := &(*rooms)[i].CreatorProfile
 		if _, ok := profilesSet[p.Username]; ok {
 			continue
 		}

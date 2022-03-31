@@ -2,4 +2,4 @@ FROM frolvlad/alpine-glibc
 
 COPY roomloop /
 WORKDIR /
-ENTRYPOINT /roomloop
+ENTRYPOINT /roomloop roomloop

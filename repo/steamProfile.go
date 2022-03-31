@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
+	"github.com/errogaht/bigscreen-tools/db"
 	"github.com/jackc/pgx/v4"
+	"log"
 	"os"
 )
 
@@ -12,15 +14,46 @@ type SteamProfile struct {
 	Conn *pgx.Conn
 }
 
-func (repo *SteamProfile) InsertOrUpdate(profiles *[]bs.SteamProfile) {
+func (repo *SteamProfile) getMetadata() *db.TableMetadata {
+	return &db.TableMetadata{
+		Name: "steam_profiles",
+		Cols: []string{"id", "community_visibility_state", "profile_state", "persona_name", "profile_url", "avatar", "avatar_medium", "avatar_full", "avatar_hash", "persona_state", "real_name", "primary_clan_id", "created_at", "persona_state_flags", "loc_country_code"},
+		PK:   "id",
+	}
+}
+
+func (r *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
+	md := r.getMetadata()
+	sql := md.GetFindBySql(cond)
+	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	var rowSlice []bs.SteamProfile
+
+	for rows.Next() {
+		var p bs.SteamProfile
+
+		err := rows.Scan(&p.Id, &p.CommunityVisibilityState, &p.ProfileState, &p.PersonaName, &p.ProfileUrl, &p.Avatar, &p.AvatarMedium, &p.AvatarFull, &p.AvatarHash, &p.PersonaState, &p.RealName, &p.PrimaryClanId, &p.CreatedAt, &p.PersonaStateFlags, &p.LocCountryCode)
+		if err != nil {
+			log.Fatal(err)
+		}
+		rowSlice = append(rowSlice, p)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return &rowSlice
+}
+
+func (repo *SteamProfile) Upsert(profiles *[]bs.SteamProfile) {
+	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
 		batch.Queue(
-			"insert into steam_profiles "+
-				"(id, community_visibility_state, profile_state, persona_name, profile_url, avatar, avatar_medium, avatar_full, avatar_hash, persona_state, real_name, primary_clan_id, created_at, persona_state_flags, loc_country_code) "+
-				"values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) "+
-				"on conflict (id) do update set "+
-				"community_visibility_state = excluded.community_visibility_state, profile_state = excluded.profile_state, persona_name = excluded.persona_name, profile_url = excluded.profile_url, avatar = excluded.avatar, avatar_medium = excluded.avatar_medium, avatar_full = excluded.avatar_full, avatar_hash = excluded.avatar_hash, persona_state = excluded.persona_state, real_name = excluded.real_name, primary_clan_id = excluded.primary_clan_id, created_at = excluded.created_at, persona_state_flags = excluded.persona_state_flags, loc_country_code = excluded.loc_country_code",
+			md.GetUpsertSql(),
 			p.Id, p.CommunityVisibilityState, p.ProfileState, p.PersonaName, p.ProfileUrl, p.Avatar, p.AvatarMedium, p.AvatarFull, p.AvatarHash, p.PersonaState, p.RealName, p.PrimaryClanId, p.CreatedAt, p.PersonaStateFlags, p.LocCountryCode,
 		)
 	}
@@ -35,8 +68,8 @@ func (repo *SteamProfile) InsertOrUpdate(profiles *[]bs.SteamProfile) {
 
 func (repo *SteamProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []bs.SteamProfile) {
 	profilesSet := make(map[string]struct{})
-	for _, room := range *rooms {
-		p := &room.CreatorProfile.SteamProfile
+	for i := range *rooms {
+		p := &(*rooms)[i].CreatorProfile.SteamProfile
 		if p.Id == "" {
 			continue
 		}

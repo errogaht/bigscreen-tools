@@ -28,13 +28,15 @@ type AccountProfile struct {
 	IsBanned           bool
 	IsStaff            bool
 	Username           string
+	SteamProfileId     string
+	OculusProfileId    string
 	SteamProfile       SteamProfile
 	OculusProfile      OculusProfile
 }
 type OculusProfile struct {
-	OculusId            string
-	OculusImageURL      string
-	OculusSmallImageURL string
+	Id            string `json:"oculusId"`
+	ImageURL      string `json:"oculusImageURL"`
+	SmallImageURL string `json:"oculusSmallImageURL"`
 }
 type SteamProfile struct {
 	Id                       string `json:"steamid"`
@@ -66,23 +68,24 @@ type RoomUser struct {
 	AccountProfile AccountProfile
 }
 type Room struct {
-	Creator        RoomCreator
-	CreatorProfile AccountProfile
-	Name           string
-	Description    string
-	Category       string
-	Environment    string
-	Size           uint8
-	Version        string
-	RoomType       string
-	Visibility     string
-	InviteCode     string
-	Status         string
-	RemoteUsers    []RoomUser
-	Participants   uint8
-	CreatedAt      time.Time
-	RoomId         string
-	Id             string
+	Creator                RoomCreator
+	CreatorProfile         AccountProfile
+	CreatorProfileUsername string
+	Name                   string
+	Description            string
+	Category               string
+	Environment            string
+	Size                   uint8
+	Version                string
+	RoomType               string
+	Visibility             string
+	InviteCode             string
+	Status                 string
+	RemoteUsers            []RoomUser
+	Participants           uint8
+	CreatedAt              time.Time
+	RoomId                 string
+	Id                     string
 }
 
 func (bsRef *Bigscreen) GetRooms() (rooms []Room) {
@@ -114,8 +117,8 @@ func getMsgTemplate() string {
 	return string(content)
 }
 
-func (bsRef *Bigscreen) GetOnlineRooms() string {
-	listOfRooms := bsRef.GetRooms()
+func (bsRef *Bigscreen) GetOnlineRoomsText(listOfRoomsRef *[]Room) string {
+	listOfRooms := *listOfRoomsRef
 
 	sort.SliceStable(listOfRooms, func(i, j int) bool {
 		return listOfRooms[i].Participants > listOfRooms[j].Participants

@@ -9,4 +9,5 @@ type Bigscreen struct {
 	HostRealtime string
 	Credentials  LoginCredentials
 	DeviceInfo   string
+	TgToken      string
 }

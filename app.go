@@ -5,12 +5,18 @@ import (
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
 	"github.com/errogaht/bigscreen-tools/repo"
+	"github.com/errogaht/bigscreen-tools/s"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v4"
 	_ "github.com/joho/godotenv/autoload"
 	"log"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 )
+
+const SETTING_ROOMS_LAST_UPDATED = "rooms.last.updated"
 
 func getTelegramToken() string {
 	content, err := os.ReadFile("bot_token.txt")
@@ -20,24 +26,6 @@ func getTelegramToken() string {
 
 	return string(content)
 }
-
-/*func menu(bsRef *bs.Bigscreen) {
-	var enteredCommand string
-	fmt.Println("Enter command (rooms, participants):")
-	fmt.Scan(&enteredCommand)
-
-	switch enteredCommand {
-	case "rooms":
-		bsRef.PrintOnlineRooms()
-			case "participants":
-			participants()
-	case "exit":
-		os.Exit(0)
-	}
-
-	menu(bsRef)
-}*/
-
 func debug(i interface{}) {
 
 }
@@ -54,26 +42,12 @@ func getConn() *pgx.Conn {
 func logM(m string) {
 	fmt.Printf("%s: %s\n", time.Now().Format("2006-01-02 15:04:05"), m)
 }
-func main() {
+func roomLoop(bigscreen *bs.Bigscreen) {
 	logM("start")
-	bigscreen := &(bs.Bigscreen{
-		JWT: bs.JWTToken{
-			Refresh: os.Getenv("BS_JWT_REFRESH"),
-			Token:   "renew",
-		},
-		Bearer:       os.Getenv("BS_BEARER"),
-		HostAccounts: os.Getenv("BS_HOST_ACC"),
-		HostRealtime: os.Getenv("BS_HOST_REALTIME"),
-		Credentials: bs.LoginCredentials{
-			Email:    os.Getenv("BS_EMAIL"),
-			Password: os.Getenv("BS_PWD"),
-		},
-		DeviceInfo: fmt.Sprintf(`{"deviceUniqueIdentifier":"%s","drmSystem":"","version":"0.903.19.f05e4d-beta-class-beta","deviceName":"Oculus Quest 2","deviceModel":"Oculus Quest","operatingSystem":"Android OS 10 / API-29 (QQ3A.200805.001/22310100587300000)","CPU":"ARM64 FP ASIMD AES","memory":5842,"GPU":"Adreno (TM) 650"}`, os.Getenv("BS_DEVICE_ID")),
-	})
-
 	var rooms []bs.Room
 	conn := getConn()
 	defer conn.Close(context.Background())
+	settingsRepo := repo.Settings{Conn: conn}
 
 	roomRepo := repo.Room{Conn: conn}
 	oculusProfilesRepo := repo.OculusProfile{Conn: conn}
@@ -82,10 +56,10 @@ func main() {
 
 	for {
 		fmt.Println("---------------------------------------------")
-		fmt.Printf("%s: start\n", time.Now().Format("2006-01-02 15:04:05"))
 		bigscreen.Verify()
 		rooms = bigscreen.GetRooms()
-		fmt.Printf("%s: got %d rooms\n", time.Now().Format("2006-01-02 15:04:05"), len(rooms))
+		logM(fmt.Sprintf("got %d rooms\n", len(rooms)))
+
 		//for i := range rooms {
 		//	room := &rooms[i]
 		//	rooms[i] = bigscreen.GetRoom(room.Id)
@@ -94,29 +68,109 @@ func main() {
 		//debug(rooms)
 
 		oculusProfiles := oculusProfilesRepo.GetProfilesFrom(&rooms)
-		oculusProfilesRepo.InsertOrUpdate(&oculusProfiles)
-		fmt.Printf("%s: %d oculusProfiles upsert\n", time.Now().Format("2006-01-02 15:04:05"), len(oculusProfiles))
+		oculusProfilesRepo.Upsert(&oculusProfiles)
+		logM(fmt.Sprintf("%d oculusProfiles upsert\n", len(oculusProfiles)))
 
 		steamProfiles := steamProfilesRepo.GetProfilesFrom(&rooms)
-		steamProfilesRepo.InsertOrUpdate(&steamProfiles)
-		fmt.Printf("%s: %d steamProfiles upsert \n", time.Now().Format("2006-01-02 15:04:05"), len(steamProfiles))
+		steamProfilesRepo.Upsert(&steamProfiles)
+		logM(fmt.Sprintf("%d steamProfiles upsert \n", len(steamProfiles)))
 
 		creatorProfiles := accountProfilesRepo.GetCreatorProfilesFrom(&rooms)
-		accountProfilesRepo.InsertOrUpdate(&creatorProfiles)
+		accountProfilesRepo.Upsert(&creatorProfiles)
 
 		roomRepo.DeleteAll()
 		roomRepo.Insert(&rooms)
-		fmt.Printf("%s: rooms refreshed \n", time.Now().Format("2006-01-02 15:04:05"))
+		settingsRepo.Upsert(&[]s.Settings{{Id: SETTING_ROOMS_LAST_UPDATED, Timestamp: time.Now()}})
+		logM(fmt.Sprintf("rooms refreshed, 30s. sleep...\n"))
+
 		time.Sleep(30 * time.Second)
 	}
+}
+func main() {
+	bigscreen := &(bs.Bigscreen{
+		JWT: bs.JWTToken{
+			Refresh: os.Getenv("BS_JWT_REFRESH"),
+			Token:   "renew",
+		},
+		Bearer:       os.Getenv("BS_BEARER"),
+		HostAccounts: os.Getenv("BS_HOST_ACC"),
+		HostRealtime: os.Getenv("BS_HOST_REALTIME"),
+		TgToken:      os.Getenv("TG_TOKEN"),
+		Credentials: bs.LoginCredentials{
+			Email:    os.Getenv("BS_EMAIL"),
+			Password: os.Getenv("BS_PWD"),
+		},
+		DeviceInfo: fmt.Sprintf(`{"deviceUniqueIdentifier":"%s","drmSystem":"","version":"0.903.19.f05e4d-beta-class-beta","deviceName":"Oculus Quest 2","deviceModel":"Oculus Quest","operatingSystem":"Android OS 10 / API-29 (QQ3A.200805.001/22310100587300000)","CPU":"ARM64 FP ASIMD AES","memory":5842,"GPU":"Adreno (TM) 650"}`, os.Getenv("BS_DEVICE_ID")),
+	})
+	args := os.Args[1:]
+	var command string
+	if len(args) == 0 {
+		command = "help"
+	} else {
+		command = args[0]
+	}
+	switch command {
+	case "help":
+		fmt.Println("Enter command (rooms, participants):")
+	case "roomloop":
+		roomLoop(bigscreen)
+	case "tghook":
+		tgHook(bigscreen)
+	case "exit":
+		os.Exit(0)
+	}
+}
 
-	//verify(bigscreen)
-	//menu()
+func tgHook(bgCtxRef *bs.Bigscreen) {
+	bot, err := tgbotapi.NewBotAPI(bgCtxRef.TgToken)
+	if err != nil {
+		log.Panic(err)
+	}
 
-	//tgCtx := tg.Context{
-	//		Token: "",
-	//	}
-	//	getMessageTgLoop(&tgCtx, bigscreen)
+	bot.Debug = true
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	updates := bot.ListenForWebhook(os.Getenv("TG_WEBHOOK_ROUTE"))
+	go http.ListenAndServe("0.0.0.0:8080", nil)
+
+	msgLimit := 4096
+	var messages []string
+
+	conn := getConn()
+	defer conn.Close(context.Background())
+	settingsRepo := repo.Settings{Conn: conn}
+	roomsRepo := repo.Room{Conn: conn}
+	for update := range updates {
+		if update.Message.Text == "rooms" {
+			rooms := roomsRepo.FindAll()
+			lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(SETTING_ROOMS_LAST_UPDATED).Timestamp))
+			roomsText := bgCtxRef.GetOnlineRoomsText(rooms)
+			roomsText += "\n" + lastUpdated
+			if len(roomsText) > msgLimit {
+				lines := strings.Split(roomsText, "\n")
+				var buf string
+				for _, line := range lines {
+					if len(buf+line) > msgLimit {
+						messages = append(messages, buf)
+						buf = ""
+					}
+					buf += line
+				}
+				messages = append(messages, buf)
+			} else {
+				messages = append(messages, roomsText)
+			}
+			for _, message := range messages {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+				bot.Send(msg)
+			}
+		}
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
+
+		bot.Send(msg)
+		log.Printf("%+v\n", update)
+	}
+
 }
 
 /*func getMessageTgLoop(tgCtxRef *tg.Context, bgCtxRef *bs.Bigscreen) {
@@ -167,15 +221,3 @@ func main() {
 	}
 }
 */
-/*func main() {
-
-	token := de.Login()
-	de.Verify(token)
-	de.Verify(token)
-	de.Verify(token)
-	de.Verify(token)
-	de.Verify(token)
-	de.Verify(token)
-	de.LeaveRoom(token)
-
-}*/
