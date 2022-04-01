@@ -62,4 +62,12 @@ resource "docker_container" "whoami" {
     label = "traefik.http.routers.whoami.tls.certresolver"
     value = "default"
   }
+  labels {
+    label = "traefik.http.routers.whoami.tls.domains[0].main"
+    value = var.mainHost
+  }
+  labels {
+    label = "traefik.http.routers.whoami.tls.domains[0].sans"
+    value = "*.${var.mainHost}"
+  }
 }

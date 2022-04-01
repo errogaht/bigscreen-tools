@@ -58,7 +58,7 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 		fmt.Println("---------------------------------------------")
 		bigscreen.Verify()
 		rooms = bigscreen.GetRooms()
-		logM(fmt.Sprintf("got %d rooms\n", len(rooms)))
+		logM(fmt.Sprintf("got %d rooms", len(rooms)))
 
 		//for i := range rooms {
 		//	room := &rooms[i]
@@ -69,11 +69,11 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 
 		oculusProfiles := oculusProfilesRepo.GetProfilesFrom(&rooms)
 		oculusProfilesRepo.Upsert(&oculusProfiles)
-		logM(fmt.Sprintf("%d oculusProfiles upsert\n", len(oculusProfiles)))
+		logM(fmt.Sprintf("%d oculusProfiles upsert", len(oculusProfiles)))
 
 		steamProfiles := steamProfilesRepo.GetProfilesFrom(&rooms)
 		steamProfilesRepo.Upsert(&steamProfiles)
-		logM(fmt.Sprintf("%d steamProfiles upsert \n", len(steamProfiles)))
+		logM(fmt.Sprintf("%d steamProfiles upsert", len(steamProfiles)))
 
 		creatorProfiles := accountProfilesRepo.GetCreatorProfilesFrom(&rooms)
 		accountProfilesRepo.Upsert(&creatorProfiles)
@@ -81,7 +81,7 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 		roomRepo.DeleteAll()
 		roomRepo.Insert(&rooms)
 		settingsRepo.Upsert(&[]s.Settings{{Id: SETTING_ROOMS_LAST_UPDATED, Timestamp: time.Now()}})
-		logM(fmt.Sprintf("rooms refreshed, 30s. sleep...\n"))
+		logM(fmt.Sprintf("rooms refreshed, 30s. sleep..."))
 
 		time.Sleep(30 * time.Second)
 	}
@@ -141,7 +141,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 	settingsRepo := repo.Settings{Conn: conn}
 	roomsRepo := repo.Room{Conn: conn}
 	for update := range updates {
-		if update.Message.Text == "rooms" {
+		if update.UpdateID != 0 && update.Message.Text == "rooms" {
 			rooms := roomsRepo.FindAll()
 			lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(SETTING_ROOMS_LAST_UPDATED).Timestamp))
 			roomsText := bgCtxRef.GetOnlineRoomsText(rooms)
@@ -160,15 +160,12 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 			} else {
 				messages = append(messages, roomsText)
 			}
-			for _, message := range messages {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+			for i := range messages {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, messages[i])
 				bot.Send(msg)
 			}
+			messages = nil
 		}
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-
-		bot.Send(msg)
-		log.Printf("%+v\n", update)
 	}
 
 }

@@ -16,9 +16,6 @@ resource "docker_container" "postgres" {
   image = docker_image.postgres.latest
   name  = "postgres"
   restart = "always"
-  networks_advanced {
-    name = docker_network.internal.name
-  }
   ports {
     internal = 5432
     external = 5432

@@ -46,4 +46,12 @@ resource "docker_container" "registry" {
     label = "traefik.http.routers.registry.tls.certresolver"
     value = "default"
   }
+  labels {
+    label = "traefik.http.routers.registry.tls.domains[0].main"
+    value = var.mainHost
+  }
+  labels {
+    label = "traefik.http.routers.registry.tls.domains[0].sans"
+    value = "*.${var.mainHost}"
+  }
 }
