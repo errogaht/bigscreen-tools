@@ -28,6 +28,8 @@ func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountP
 	sql := md.GetFindBySql(cond)
 	rows, err := r.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 	defer rows.Close()
@@ -41,6 +43,8 @@ func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountP
 		var oculusProfileId sql2.NullString
 		err := rows.Scan(&p.Username, &p.CreatedAt, &p.IsVerified, &p.IsBanned, &p.IsStaff, &steamProfileId, &oculusProfileId)
 		if err != nil {
+			fmt.Printf("%v\n", sql)
+			fmt.Printf("%v\n", args)
 			log.Fatal(err)
 		}
 		if steamProfileId.Valid {
@@ -56,9 +60,15 @@ func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountP
 		rowSlice = append(rowSlice, p)
 	}
 	if err := rows.Err(); err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 
+	if len(rowSlice) == 0 {
+		null := make([]bs.AccountProfile, 0)
+		return &null
+	}
 	oculusProfilesRepo := OculusProfile{Conn: r.Conn}
 	oculusProfiles := oculusProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
 	oculusProfilesById := make(map[string]*bs.OculusProfile)

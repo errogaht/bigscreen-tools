@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"log"
 	"os"
+	"strings"
 )
 
 type OculusProfile struct {
@@ -23,25 +24,34 @@ func (repo *OculusProfile) getMetadata() *db.TableMetadata {
 }
 
 func (r *OculusProfile) findBy(cond string, args ...interface{}) *[]bs.OculusProfile {
+	var rowSlice []bs.OculusProfile
+	if strings.Contains(cond, "IN") && len(args) == 0 {
+		return &rowSlice
+	}
 	md := r.getMetadata()
 	sql := md.GetFindBySql(cond)
 	rows, err := r.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 	defer rows.Close()
-	var rowSlice []bs.OculusProfile
 
 	for rows.Next() {
 		var p bs.OculusProfile
 
 		err := rows.Scan(&p.Id, &p.ImageURL, &p.SmallImageURL)
 		if err != nil {
+			fmt.Printf("%v\n", sql)
+			fmt.Printf("%v\n", args)
 			log.Fatal(err)
 		}
 		rowSlice = append(rowSlice, p)
 	}
 	if err := rows.Err(); err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 

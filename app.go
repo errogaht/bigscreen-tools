@@ -87,6 +87,13 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 	}
 }
 func main() {
+	/*conn := getConn()
+	defer conn.Close(context.Background())
+	roomsRepo := repo.Room{Conn: conn}
+	rooms := roomsRepo.FindBy("category = $1", "GAMING")
+	rooms = roomsRepo.FindBy("category = $1", "CHAT")
+
+	debug(rooms)*/
 	bigscreen := &(bs.Bigscreen{
 		JWT: bs.JWTToken{
 			Refresh: os.Getenv("BS_JWT_REFRESH"),
@@ -133,41 +140,89 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 	updates := bot.ListenForWebhook(os.Getenv("TG_WEBHOOK_ROUTE"))
 	go http.ListenAndServe("0.0.0.0:8080", nil)
 
-	msgLimit := 4096
-	var messages []string
-
 	conn := getConn()
 	defer conn.Close(context.Background())
 	settingsRepo := repo.Settings{Conn: conn}
 	roomsRepo := repo.Room{Conn: conn}
+
+	menuKeyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("/all"),
+			tgbotapi.NewKeyboardButton("/chat"),
+			tgbotapi.NewKeyboardButton("/movies"),
+			tgbotapi.NewKeyboardButton("/gaming"),
+			tgbotapi.NewKeyboardButton("/nsfw"),
+		),
+	)
 	for update := range updates {
-		if update.UpdateID != 0 && update.Message.Text == "rooms" {
-			rooms := roomsRepo.FindAll()
-			lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(SETTING_ROOMS_LAST_UPDATED).Timestamp))
-			roomsText := bgCtxRef.GetOnlineRoomsText(rooms)
-			roomsText += "\n" + lastUpdated
-			if len(roomsText) > msgLimit {
-				lines := strings.Split(roomsText, "\n")
-				var buf string
-				for _, line := range lines {
-					if len(buf+line) > msgLimit {
-						messages = append(messages, buf)
-						buf = ""
-					}
-					buf += line
-				}
-				messages = append(messages, buf)
-			} else {
-				messages = append(messages, roomsText)
-			}
-			for i := range messages {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, messages[i])
-				bot.Send(msg)
-			}
-			messages = nil
+		if update.Message == nil { // ignore any non-Message updates
+			continue
+		}
+
+		if !update.Message.IsCommand() {
+			continue
+		}
+
+		switch update.Message.Command() {
+
+		case "help":
+		case "start":
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I understand /all, /chat, /movies, /gaming, /nsfw")
+			msg.ReplyMarkup = menuKeyboard
+			bot.Send(msg)
+		case "all":
+			rooms := roomsRepo.FindBy("")
+			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+		case "chat":
+			rooms := roomsRepo.FindBy("category = $1", "CHAT")
+			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+		case "movies":
+			rooms := roomsRepo.FindBy("category = $1", "MOVIES")
+			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+		case "gaming":
+			rooms := roomsRepo.FindBy("category = $1", "GAMING")
+			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+		case "nsfw":
+			rooms := roomsRepo.FindBy("category = $1", "NSFW")
+			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+		default:
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I don't know that command")
+			bot.Send(msg)
 		}
 	}
 
+}
+func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo *repo.Settings, update *tgbotapi.Update, bot *tgbotapi.BotAPI) {
+	msgLimit := 4096
+	var messages []string
+	lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(SETTING_ROOMS_LAST_UPDATED).Timestamp))
+	if len(*rooms) == 0 {
+		msgText := "No rooms found.\n"
+		msgText += lastUpdated
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+		bot.Send(msg)
+		return
+	}
+	roomsText := bgCtxRef.GetOnlineRoomsText(rooms)
+	roomsText += "\n" + lastUpdated
+	if len(roomsText) > msgLimit {
+		lines := strings.Split(roomsText, "\n")
+		var buf string
+		for _, line := range lines {
+			if len(buf+line) > msgLimit {
+				messages = append(messages, buf)
+				buf = ""
+			}
+			buf += line
+		}
+		messages = append(messages, buf)
+	} else {
+		messages = append(messages, roomsText)
+	}
+	for i := range messages {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, messages[i])
+		bot.Send(msg)
+	}
 }
 
 /*func getMessageTgLoop(tgCtxRef *tg.Context, bgCtxRef *bs.Bigscreen) {

@@ -32,11 +32,13 @@ func (r *Room) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (r *Room) FindAll() *[]bs.Room {
+func (r *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
 	md := r.getMetadata()
-	sql := md.GetFindBySql("")
-	rows, err := r.Conn.Query(context.Background(), sql)
+	sql := md.GetFindBySql(cond)
+	rows, err := r.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 	defer rows.Close()
@@ -48,6 +50,8 @@ func (r *Room) FindAll() *[]bs.Room {
 		var r bs.Room
 		err := rows.Scan(&r.Id, &r.CreatedAt, &r.Participants, &r.Status, &r.InviteCode, &r.Visibility, &r.RoomType, &r.Version, &r.Size, &r.Environment, &r.Category, &r.Description, &r.Name, &creatorProfileUsername)
 		if err != nil {
+			fmt.Printf("%v\n", sql)
+			fmt.Printf("%v\n", args)
 			log.Fatal(err)
 		}
 		if creatorProfileUsername.Valid {
@@ -57,7 +61,13 @@ func (r *Room) FindAll() *[]bs.Room {
 		rowSlice = append(rowSlice, r)
 	}
 	if err := rows.Err(); err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
+	}
+	if len(rowSlice) == 0 {
+		null := make([]bs.Room, 0)
+		return &null
 	}
 	accountProfilesRepo := AccountProfile{Conn: r.Conn}
 

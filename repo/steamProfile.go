@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"log"
 	"os"
+	"strings"
 )
 
 type SteamProfile struct {
@@ -23,25 +24,34 @@ func (repo *SteamProfile) getMetadata() *db.TableMetadata {
 }
 
 func (r *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
+	var rowSlice []bs.SteamProfile
+	if strings.Contains(cond, "IN") && len(args) == 0 {
+		return &rowSlice
+	}
 	md := r.getMetadata()
 	sql := md.GetFindBySql(cond)
 	rows, err := r.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 	defer rows.Close()
-	var rowSlice []bs.SteamProfile
 
 	for rows.Next() {
 		var p bs.SteamProfile
 
 		err := rows.Scan(&p.Id, &p.CommunityVisibilityState, &p.ProfileState, &p.PersonaName, &p.ProfileUrl, &p.Avatar, &p.AvatarMedium, &p.AvatarFull, &p.AvatarHash, &p.PersonaState, &p.RealName, &p.PrimaryClanId, &p.CreatedAt, &p.PersonaStateFlags, &p.LocCountryCode)
 		if err != nil {
+			fmt.Printf("%v\n", sql)
+			fmt.Printf("%v\n", args)
 			log.Fatal(err)
 		}
 		rowSlice = append(rowSlice, p)
 	}
 	if err := rows.Err(); err != nil {
+		fmt.Printf("%v\n", sql)
+		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
 
