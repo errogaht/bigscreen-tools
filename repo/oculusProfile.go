@@ -23,14 +23,14 @@ func (repo *OculusProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (r *OculusProfile) findBy(cond string, args ...interface{}) *[]bs.OculusProfile {
+func (repo *OculusProfile) findBy(cond string, args ...interface{}) *[]bs.OculusProfile {
 	var rowSlice []bs.OculusProfile
 	if strings.Contains(cond, "IN") && len(args) == 0 {
 		return &rowSlice
 	}
-	md := r.getMetadata()
+	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -74,21 +74,4 @@ func (repo *OculusProfile) Upsert(profiles *[]bs.OculusProfile) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 	}
-}
-
-func (repo *OculusProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []bs.OculusProfile) {
-	profilesSet := make(map[string]struct{})
-	var p *bs.OculusProfile
-	for i := range *rooms {
-		p = &(*rooms)[i].CreatorProfile.OculusProfile
-		if p.Id == "" {
-			continue
-		}
-		if _, ok := profilesSet[p.Id]; ok {
-			continue
-		}
-		profilesSet[p.Id] = struct{}{}
-		profiles = append(profiles, *p)
-	}
-	return
 }

@@ -16,15 +16,15 @@ type Room struct {
 }
 type Cols []string
 
-func (r *Room) DeleteAll() {
-	_, err := r.Conn.Exec(context.Background(), "DELETE FROM rooms;")
+func (repo *Room) DeleteAll() {
+	_, err := repo.Conn.Exec(context.Background(), "DELETE FROM rooms;")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func (r *Room) getMetadata() *db.TableMetadata {
+func (repo *Room) getMetadata() *db.TableMetadata {
 	return &db.TableMetadata{
 		Name: "rooms",
 		Cols: []string{"id", "created_at", "participants", "status", "invite_code", "visibility", "room_type", "version", "size", "environment", "category", "description", "name", "creator_profile"},
@@ -32,10 +32,10 @@ func (r *Room) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (r *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
-	md := r.getMetadata()
+func (repo *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
+	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -69,7 +69,7 @@ func (r *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
 		null := make([]bs.Room, 0)
 		return &null
 	}
-	accountProfilesRepo := AccountProfile{Conn: r.Conn}
+	accountProfilesRepo := AccountProfile{Conn: repo.Conn}
 
 	accProfiles := accountProfilesRepo.findBy(fmt.Sprintf("username IN(%s)", md.Params2(accProfilesIds)), accProfilesIds...)
 	creatorProfilesById := make(map[string]*bs.AccountProfile)
@@ -85,9 +85,9 @@ func (r *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
 	}
 	return &rowSlice
 }
-func (r *Room) Insert(rooms *[]bs.Room) {
+func (repo *Room) Insert(rooms *[]bs.Room) {
 	batch := &pgx.Batch{}
-	md := r.getMetadata()
+	md := repo.getMetadata()
 	for _, room := range *rooms {
 		batch.Queue(
 			fmt.Sprintf(`insert into rooms (%s) values(%s)`, md.Comma(), md.Params()),
@@ -96,7 +96,7 @@ func (r *Room) Insert(rooms *[]bs.Room) {
 		)
 	}
 
-	br := r.Conn.SendBatch(context.Background(), batch)
+	br := repo.Conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

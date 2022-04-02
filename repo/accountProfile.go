@@ -23,10 +23,10 @@ func (repo *AccountProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
-	md := r.getMetadata()
+func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
+	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -69,7 +69,7 @@ func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountP
 		null := make([]bs.AccountProfile, 0)
 		return &null
 	}
-	oculusProfilesRepo := OculusProfile{Conn: r.Conn}
+	oculusProfilesRepo := OculusProfile{Conn: repo.Conn}
 	oculusProfiles := oculusProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
 	oculusProfilesById := make(map[string]*bs.OculusProfile)
 	for i := range *oculusProfiles {
@@ -77,7 +77,7 @@ func (r *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountP
 		oculusProfilesById[profile.Id] = profile
 	}
 
-	steamProfilesRepo := SteamProfile{Conn: r.Conn}
+	steamProfilesRepo := SteamProfile{Conn: repo.Conn}
 	steamProfiles := steamProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(steamProfilesIds)), steamProfilesIds...)
 	steamProfilesById := make(map[string]*bs.SteamProfile)
 	for i := range *steamProfiles {
@@ -125,17 +125,4 @@ func (repo *AccountProfile) Upsert(profiles *[]bs.AccountProfile) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 	}
-}
-
-func (repo *AccountProfile) GetCreatorProfilesFrom(rooms *[]bs.Room) (profiles []bs.AccountProfile) {
-	profilesSet := make(map[string]struct{})
-	for i := range *rooms {
-		p := &(*rooms)[i].CreatorProfile
-		if _, ok := profilesSet[p.Username]; ok {
-			continue
-		}
-		profilesSet[p.Username] = struct{}{}
-		profiles = append(profiles, *p)
-	}
-	return
 }

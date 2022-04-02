@@ -67,15 +67,15 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 
 		//debug(rooms)
 
-		oculusProfiles := oculusProfilesRepo.GetProfilesFrom(&rooms)
+		oculusProfiles := bs.GetOculusProfilesFrom(&rooms)
 		oculusProfilesRepo.Upsert(&oculusProfiles)
 		logM(fmt.Sprintf("%d oculusProfiles upsert", len(oculusProfiles)))
 
-		steamProfiles := steamProfilesRepo.GetProfilesFrom(&rooms)
+		steamProfiles := bs.GetSteamProfilesFrom(&rooms)
 		steamProfilesRepo.Upsert(&steamProfiles)
 		logM(fmt.Sprintf("%d steamProfiles upsert", len(steamProfiles)))
 
-		creatorProfiles := accountProfilesRepo.GetCreatorProfilesFrom(&rooms)
+		creatorProfiles := bs.GetCreatorProfilesFrom(&rooms)
 		accountProfilesRepo.Upsert(&creatorProfiles)
 
 		roomRepo.DeleteAll()

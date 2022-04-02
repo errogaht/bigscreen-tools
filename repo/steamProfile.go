@@ -23,14 +23,14 @@ func (repo *SteamProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (r *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
+func (repo *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
 	var rowSlice []bs.SteamProfile
 	if strings.Contains(cond, "IN") && len(args) == 0 {
 		return &rowSlice
 	}
-	md := r.getMetadata()
+	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := r.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -74,20 +74,4 @@ func (repo *SteamProfile) Upsert(profiles *[]bs.SteamProfile) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 	}
-}
-
-func (repo *SteamProfile) GetProfilesFrom(rooms *[]bs.Room) (profiles []bs.SteamProfile) {
-	profilesSet := make(map[string]struct{})
-	for i := range *rooms {
-		p := &(*rooms)[i].CreatorProfile.SteamProfile
-		if p.Id == "" {
-			continue
-		}
-		if _, ok := profilesSet[p.Id]; ok {
-			continue
-		}
-		profilesSet[p.Id] = struct{}{}
-		profiles = append(profiles, *p)
-	}
-	return
 }
