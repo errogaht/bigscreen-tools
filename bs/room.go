@@ -3,6 +3,7 @@ package bs
 import (
 	"encoding/json"
 	"fmt"
+	"gopkg.in/guregu/null.v4"
 	"log"
 	"os"
 	"sort"
@@ -22,14 +23,14 @@ type RoomCreator struct {
 }
 
 type AccountProfile struct {
-	CreatedAtTimestamp Timestamp `json:"createdAt"`
-	CreatedAt          time.Time
-	IsVerified         bool
-	IsBanned           bool
-	IsStaff            bool
-	Username           string
-	SteamProfileId     string
-	OculusProfileId    string
+	CreatedAtTimestamp Timestamp   `json:"createdAt"`
+	CreatedAt          time.Time   `db:"created_at"`
+	IsVerified         bool        `db:"is_verified"`
+	IsBanned           bool        `db:"is_banned"`
+	IsStaff            bool        `db:"is_staff"`
+	Username           string      `db:"username"`
+	SteamProfileId     null.String `db:"steam_profile_id"`
+	OculusProfileId    null.String `db:"oculus_profile_id"`
 	SteamProfile       SteamProfile
 	OculusProfile      OculusProfile
 }

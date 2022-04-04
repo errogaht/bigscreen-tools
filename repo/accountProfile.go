@@ -2,11 +2,11 @@ package repo
 
 import (
 	"context"
-	sql2 "database/sql"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
 	"github.com/errogaht/bigscreen-tools/db"
 	"github.com/jackc/pgx/v4"
+	"github.com/randallmlough/pgxscan"
 	"log"
 	"os"
 )
@@ -35,39 +35,30 @@ func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.Accou
 	defer rows.Close()
 
 	var rowSlice []bs.AccountProfile
-	var steamProfilesIds []interface{}
-	var oculusProfilesIds []interface{}
-	for rows.Next() {
-		var p bs.AccountProfile
-		var steamProfileId sql2.NullString
-		var oculusProfileId sql2.NullString
-		err := rows.Scan(&p.Username, &p.CreatedAt, &p.IsVerified, &p.IsBanned, &p.IsStaff, &steamProfileId, &oculusProfileId)
+
+	if err := pgxscan.NewScanner(rows).Scan(&rowSlice); err != nil {
 		if err != nil {
 			fmt.Printf("%v\n", sql)
 			fmt.Printf("%v\n", args)
 			log.Fatal(err)
 		}
-		if steamProfileId.Valid {
-			steamProfilesIds = append(steamProfilesIds, steamProfileId.String)
-			p.SteamProfileId = steamProfileId.String
-		}
-
-		if oculusProfileId.Valid {
-			oculusProfilesIds = append(oculusProfilesIds, oculusProfileId.String)
-			p.OculusProfileId = oculusProfileId.String
-		}
-
-		rowSlice = append(rowSlice, p)
-	}
-	if err := rows.Err(); err != nil {
-		fmt.Printf("%v\n", sql)
-		fmt.Printf("%v\n", args)
-		log.Fatal(err)
 	}
 
 	if len(rowSlice) == 0 {
-		null := make([]bs.AccountProfile, 0)
-		return &null
+		return nil
+	}
+
+	var steamProfilesIds []interface{}
+	var oculusProfilesIds []interface{}
+	for i := range rowSlice {
+		p := &rowSlice[i]
+		if p.SteamProfileId.Valid {
+			steamProfilesIds = append(steamProfilesIds, p.SteamProfileId.String)
+		}
+
+		if p.OculusProfileId.Valid {
+			oculusProfilesIds = append(oculusProfilesIds, p.OculusProfileId.String)
+		}
 	}
 	oculusProfilesRepo := OculusProfile{Conn: repo.Conn}
 	oculusProfiles := oculusProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
@@ -86,10 +77,10 @@ func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.Accou
 	}
 	for i := range rowSlice {
 		accProfileRef := &rowSlice[i]
-		if profile, ok := steamProfilesById[accProfileRef.SteamProfileId]; ok {
+		if profile, ok := steamProfilesById[accProfileRef.SteamProfileId.String]; ok {
 			accProfileRef.SteamProfile = *profile
 		}
-		if profile, ok := oculusProfilesById[accProfileRef.OculusProfileId]; ok {
+		if profile, ok := oculusProfilesById[accProfileRef.OculusProfileId.String]; ok {
 			accProfileRef.OculusProfile = *profile
 		}
 	}
