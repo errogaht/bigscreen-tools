@@ -11,11 +11,25 @@ import (
 	"os"
 )
 
-type AccountProfile struct {
-	Conn *pgx.Conn
+type AccountProfileRepo struct {
+	conn              *pgx.Conn
+	oculusProfileRepo *OculusProfileRepo
+	steamProfileRepo  *SteamProfileRepo
 }
 
-func (repo *AccountProfile) getMetadata() *db.TableMetadata {
+func NewAccountProfileRepo(
+	conn *pgx.Conn,
+	oculusProfileRepo *OculusProfileRepo,
+	steamProfileRepo *SteamProfileRepo,
+) *AccountProfileRepo {
+	return &AccountProfileRepo{
+		conn:              conn,
+		oculusProfileRepo: oculusProfileRepo,
+		steamProfileRepo:  steamProfileRepo,
+	}
+}
+
+func (repo *AccountProfileRepo) getMetadata() *db.TableMetadata {
 	return &db.TableMetadata{
 		Name: "account_profiles",
 		Cols: []string{"username", "created_at", "is_verified", "is_banned", "is_staff", "steam_profile_id", "oculus_profile_id"},
@@ -23,10 +37,10 @@ func (repo *AccountProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
+func (repo *AccountProfileRepo) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
 	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := repo.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -60,16 +74,14 @@ func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.Accou
 			oculusProfilesIds = append(oculusProfilesIds, p.OculusProfileId.String)
 		}
 	}
-	oculusProfilesRepo := OculusProfile{Conn: repo.Conn}
-	oculusProfiles := oculusProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
+	oculusProfiles := repo.oculusProfileRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
 	oculusProfilesById := make(map[string]*bs.OculusProfile)
 	for i := range *oculusProfiles {
 		profile := &(*oculusProfiles)[i]
 		oculusProfilesById[profile.Id] = profile
 	}
 
-	steamProfilesRepo := SteamProfile{Conn: repo.Conn}
-	steamProfiles := steamProfilesRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(steamProfilesIds)), steamProfilesIds...)
+	steamProfiles := repo.steamProfileRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(steamProfilesIds)), steamProfilesIds...)
 	steamProfilesById := make(map[string]*bs.SteamProfile)
 	for i := range *steamProfiles {
 		profile := &(*steamProfiles)[i]
@@ -88,7 +100,7 @@ func (repo *AccountProfile) findBy(cond string, args ...interface{}) *[]bs.Accou
 	return &rowSlice
 }
 
-func (repo *AccountProfile) Upsert(profiles *[]bs.AccountProfile) {
+func (repo *AccountProfileRepo) Upsert(profiles *[]bs.AccountProfile) {
 	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
@@ -110,7 +122,7 @@ func (repo *AccountProfile) Upsert(profiles *[]bs.AccountProfile) {
 		)
 	}
 
-	br := repo.Conn.SendBatch(context.Background(), batch)
+	br := repo.conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

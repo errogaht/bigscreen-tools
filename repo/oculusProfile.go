@@ -11,11 +11,19 @@ import (
 	"strings"
 )
 
-type OculusProfile struct {
-	Conn *pgx.Conn
+type OculusProfileRepo struct {
+	conn *pgx.Conn
 }
 
-func (repo *OculusProfile) getMetadata() *db.TableMetadata {
+func NewOculusProfileRepo(
+	conn *pgx.Conn,
+) *OculusProfileRepo {
+	return &OculusProfileRepo{
+		conn: conn,
+	}
+}
+
+func (repo *OculusProfileRepo) getMetadata() *db.TableMetadata {
 	return &db.TableMetadata{
 		Name: "oculus_profiles",
 		Cols: []string{"id", "image_url", "small_image_url"},
@@ -23,14 +31,14 @@ func (repo *OculusProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (repo *OculusProfile) findBy(cond string, args ...interface{}) *[]bs.OculusProfile {
+func (repo *OculusProfileRepo) findBy(cond string, args ...interface{}) *[]bs.OculusProfile {
 	var rowSlice []bs.OculusProfile
 	if strings.Contains(cond, "IN") && len(args) == 0 {
 		return &rowSlice
 	}
 	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := repo.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -58,7 +66,7 @@ func (repo *OculusProfile) findBy(cond string, args ...interface{}) *[]bs.Oculus
 	return &rowSlice
 }
 
-func (repo *OculusProfile) Upsert(profiles *[]bs.OculusProfile) {
+func (repo *OculusProfileRepo) Upsert(profiles *[]bs.OculusProfile) {
 	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
@@ -68,7 +76,7 @@ func (repo *OculusProfile) Upsert(profiles *[]bs.OculusProfile) {
 		)
 	}
 
-	br := repo.Conn.SendBatch(context.Background(), batch)
+	br := repo.conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

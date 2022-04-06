@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
+	"github.com/errogaht/bigscreen-tools/common"
 	"github.com/errogaht/bigscreen-tools/repo"
-	"github.com/errogaht/bigscreen-tools/s"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v4"
 	_ "github.com/joho/godotenv/autoload"
@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 )
-
-const SETTING_ROOMS_LAST_UPDATED = "rooms.last.updated"
 
 func getTelegramToken() string {
 	content, err := os.ReadFile("bot_token.txt")
@@ -30,35 +28,33 @@ func debug(i interface{}) {
 
 }
 
-func getConn() *pgx.Conn {
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
-	}
+var conn *pgx.Conn
 
+func NewConn() *pgx.Conn {
+	if nil == conn {
+		var err error
+		conn, err = pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+			os.Exit(1)
+		}
+	}
 	return conn
 }
-func logM(m string) {
-	fmt.Printf("%s: %s\n", time.Now().Format("2006-01-02 15:04:05"), m)
-}
-func roomLoop(bigscreen *bs.Bigscreen) {
-	logM("start")
-	var rooms []bs.Room
-	conn := getConn()
-	defer conn.Close(context.Background())
-	settingsRepo := repo.Settings{Conn: conn}
 
-	roomRepo := repo.Room{Conn: conn}
-	oculusProfilesRepo := repo.OculusProfile{Conn: conn}
-	steamProfilesRepo := repo.SteamProfile{Conn: conn}
-	accountProfilesRepo := repo.AccountProfile{Conn: conn}
+func roomLoop(bigscreen *bs.Bigscreen) {
+	common.LogM("start")
+	var rooms []bs.Room
+	conn := NewConn()
+	defer conn.Close(context.Background())
+
+	roomRepo := InitializeRoomRepo()
 
 	for {
 		fmt.Println("---------------------------------------------")
 		bigscreen.Verify()
 		rooms = bigscreen.GetRooms()
-		logM(fmt.Sprintf("got %d rooms", len(rooms)))
+		common.LogM(fmt.Sprintf("got %d rooms", len(rooms)))
 
 		//for i := range rooms {
 		//	room := &rooms[i]
@@ -66,30 +62,15 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 		//}
 
 		//debug(rooms)
-
-		oculusProfiles := bs.GetOculusProfilesFrom(&rooms)
-		oculusProfilesRepo.Upsert(&oculusProfiles)
-		logM(fmt.Sprintf("%d oculusProfiles upsert", len(oculusProfiles)))
-
-		steamProfiles := bs.GetSteamProfilesFrom(&rooms)
-		steamProfilesRepo.Upsert(&steamProfiles)
-		logM(fmt.Sprintf("%d steamProfiles upsert", len(steamProfiles)))
-
-		creatorProfiles := bs.GetCreatorProfilesFrom(&rooms)
-		accountProfilesRepo.Upsert(&creatorProfiles)
-
-		roomRepo.DeleteAll()
-		roomRepo.Insert(&rooms)
-		settingsRepo.Upsert(&[]s.Settings{{Id: SETTING_ROOMS_LAST_UPDATED, Timestamp: time.Now()}})
-		logM(fmt.Sprintf("rooms refreshed, 30s. sleep..."))
+		roomRepo.RefreshRoomsInDB(&rooms)
 
 		time.Sleep(30 * time.Second)
 	}
 }
 func main() {
-	/*conn := getConn()
+	/*conn := NewConn()
 	defer conn.Close(context.Background())
-	roomsRepo := repo.Room{Conn: conn}
+	roomsRepo := InitializeRoomRepo()
 	rooms := roomsRepo.FindBy("category = $1", "GAMING")
 	rooms = roomsRepo.FindBy("category = $1", "CHAT")
 
@@ -140,10 +121,10 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 	updates := bot.ListenForWebhook(os.Getenv("TG_WEBHOOK_ROUTE"))
 	go http.ListenAndServe("0.0.0.0:8080", nil)
 
-	conn := getConn()
+	conn := NewConn()
 	defer conn.Close(context.Background())
-	settingsRepo := repo.Settings{Conn: conn}
-	roomsRepo := repo.Room{Conn: conn}
+	settingsRepo := repo.SettingsRepo{Conn: conn}
+	roomsRepo := InitializeRoomRepo()
 
 	menuKeyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
@@ -192,10 +173,10 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 	}
 
 }
-func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo *repo.Settings, update *tgbotapi.Update, bot *tgbotapi.BotAPI) {
+func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo *repo.SettingsRepo, update *tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	msgLimit := 4096
 	var messages []string
-	lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(SETTING_ROOMS_LAST_UPDATED).Timestamp))
+	lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(repo.SETTING_ROOMS_LAST_UPDATED).Timestamp))
 	if len(*rooms) == 0 {
 		msgText := "No rooms found.\n"
 		msgText += lastUpdated

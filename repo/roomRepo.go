@@ -5,26 +5,68 @@ import (
 	sql2 "database/sql"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
+	"github.com/errogaht/bigscreen-tools/common"
 	"github.com/errogaht/bigscreen-tools/db"
+	"github.com/errogaht/bigscreen-tools/s"
 	"github.com/jackc/pgx/v4"
 	"log"
 	"os"
+	"time"
 )
 
-type Room struct {
-	Conn *pgx.Conn
+type RoomRepo struct {
+	conn               *pgx.Conn
+	accountProfileRepo *AccountProfileRepo
+	oculusProfilesRepo *OculusProfileRepo
+	steamProfilesRepo  *SteamProfileRepo
+	settingsRepo       *SettingsRepo
 }
+
+func NewRoomRepo(
+	conn *pgx.Conn,
+	accountProfileRepo *AccountProfileRepo,
+	oculusProfilesRepo *OculusProfileRepo,
+	steamProfilesRepo *SteamProfileRepo,
+	settingsRepo *SettingsRepo,
+) *RoomRepo {
+	return &RoomRepo{
+		conn:               conn,
+		accountProfileRepo: accountProfileRepo,
+		oculusProfilesRepo: oculusProfilesRepo,
+		steamProfilesRepo:  steamProfilesRepo,
+		settingsRepo:       settingsRepo,
+	}
+}
+
 type Cols []string
 
-func (repo *Room) DeleteAll() {
-	_, err := repo.Conn.Exec(context.Background(), "DELETE FROM rooms;")
+func (repo *RoomRepo) DeleteAll() {
+	_, err := repo.conn.Exec(context.Background(), "DELETE FROM rooms;")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func (repo *Room) getMetadata() *db.TableMetadata {
+func (repo *RoomRepo) RefreshRoomsInDB(rooms *[]bs.Room) {
+	oculusProfiles := bs.GetOculusProfilesFrom(rooms)
+	repo.oculusProfilesRepo.Upsert(&oculusProfiles)
+	common.LogM(fmt.Sprintf("%d oculusProfiles upsert", len(oculusProfiles)))
+
+	steamProfiles := bs.GetSteamProfilesFrom(rooms)
+	repo.steamProfilesRepo.Upsert(&steamProfiles)
+	common.LogM(fmt.Sprintf("%d steamProfiles upsert", len(steamProfiles)))
+
+	creatorProfiles := bs.GetCreatorProfilesFrom(rooms)
+	repo.accountProfileRepo.Upsert(&creatorProfiles)
+
+	repo.DeleteAll()
+	repo.Insert(rooms)
+	repo.settingsRepo.Upsert(&[]s.Settings{{Id: SETTING_ROOMS_LAST_UPDATED, Timestamp: time.Now()}})
+	common.LogM(fmt.Sprintf("rooms refreshed, 30s. sleep..."))
+}
+
+func (repo *RoomRepo) getMetadata() *db.TableMetadata {
 	return &db.TableMetadata{
 		Name: "rooms",
 		Cols: []string{"id", "created_at", "participants", "status", "invite_code", "visibility", "room_type", "version", "size", "environment", "category", "description", "name", "creator_profile"},
@@ -32,10 +74,10 @@ func (repo *Room) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (repo *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
+func (repo *RoomRepo) FindBy(cond string, args ...interface{}) *[]bs.Room {
 	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := repo.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -69,9 +111,8 @@ func (repo *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
 		null := make([]bs.Room, 0)
 		return &null
 	}
-	accountProfilesRepo := AccountProfile{Conn: repo.Conn}
 
-	accProfiles := accountProfilesRepo.findBy(fmt.Sprintf("username IN(%s)", md.Params2(accProfilesIds)), accProfilesIds...)
+	accProfiles := repo.accountProfileRepo.findBy(fmt.Sprintf("username IN(%s)", md.Params2(accProfilesIds)), accProfilesIds...)
 	creatorProfilesById := make(map[string]*bs.AccountProfile)
 	for i := range *accProfiles {
 		profile := &(*accProfiles)[i]
@@ -85,7 +126,7 @@ func (repo *Room) FindBy(cond string, args ...interface{}) *[]bs.Room {
 	}
 	return &rowSlice
 }
-func (repo *Room) Insert(rooms *[]bs.Room) {
+func (repo *RoomRepo) Insert(rooms *[]bs.Room) {
 	batch := &pgx.Batch{}
 	md := repo.getMetadata()
 	for _, room := range *rooms {
@@ -96,7 +137,7 @@ func (repo *Room) Insert(rooms *[]bs.Room) {
 		)
 	}
 
-	br := repo.Conn.SendBatch(context.Background(), batch)
+	br := repo.conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

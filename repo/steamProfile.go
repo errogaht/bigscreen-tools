@@ -11,11 +11,19 @@ import (
 	"strings"
 )
 
-type SteamProfile struct {
-	Conn *pgx.Conn
+type SteamProfileRepo struct {
+	conn *pgx.Conn
 }
 
-func (repo *SteamProfile) getMetadata() *db.TableMetadata {
+func NewSteamProfileRepo(
+	conn *pgx.Conn,
+) *SteamProfileRepo {
+	return &SteamProfileRepo{
+		conn: conn,
+	}
+}
+
+func (repo *SteamProfileRepo) getMetadata() *db.TableMetadata {
 	return &db.TableMetadata{
 		Name: "steam_profiles",
 		Cols: []string{"id", "community_visibility_state", "profile_state", "persona_name", "profile_url", "avatar", "avatar_medium", "avatar_full", "avatar_hash", "persona_state", "real_name", "primary_clan_id", "created_at", "persona_state_flags", "loc_country_code"},
@@ -23,14 +31,14 @@ func (repo *SteamProfile) getMetadata() *db.TableMetadata {
 	}
 }
 
-func (repo *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
+func (repo *SteamProfileRepo) findBy(cond string, args ...interface{}) *[]bs.SteamProfile {
 	var rowSlice []bs.SteamProfile
 	if strings.Contains(cond, "IN") && len(args) == 0 {
 		return &rowSlice
 	}
 	md := repo.getMetadata()
 	sql := md.GetFindBySql(cond)
-	rows, err := repo.Conn.Query(context.Background(), sql, args...)
+	rows, err := repo.conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -58,7 +66,7 @@ func (repo *SteamProfile) findBy(cond string, args ...interface{}) *[]bs.SteamPr
 	return &rowSlice
 }
 
-func (repo *SteamProfile) Upsert(profiles *[]bs.SteamProfile) {
+func (repo *SteamProfileRepo) Upsert(profiles *[]bs.SteamProfile) {
 	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
@@ -68,7 +76,7 @@ func (repo *SteamProfile) Upsert(profiles *[]bs.SteamProfile) {
 		)
 	}
 
-	br := repo.Conn.SendBatch(context.Background(), batch)
+	br := repo.conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

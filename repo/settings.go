@@ -9,11 +9,21 @@ import (
 	"time"
 )
 
-type Settings struct {
+type SettingsRepo struct {
 	Conn *pgx.Conn
 }
 
-func (repo *Settings) Find(id string) (r s.Settings) {
+const SETTING_ROOMS_LAST_UPDATED = "rooms.last.updated"
+
+func NewSettingsRepo(
+	conn *pgx.Conn,
+) *SettingsRepo {
+	return &SettingsRepo{
+		Conn: conn,
+	}
+}
+
+func (repo *SettingsRepo) Find(id string) (r s.Settings) {
 	var id2 string
 	var timestamp time.Time
 	var int2 int64
@@ -34,7 +44,7 @@ func (repo *Settings) Find(id string) (r s.Settings) {
 	return
 }
 
-func (repo *Settings) Upsert(settings *[]s.Settings) {
+func (repo *SettingsRepo) Upsert(settings *[]s.Settings) {
 	batch := &pgx.Batch{}
 	for _, p := range *settings {
 		batch.Queue(
