@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
-	"github.com/errogaht/bigscreen-tools/db"
 	"github.com/jackc/pgx/v4"
 	"github.com/randallmlough/pgxscan"
 	"log"
@@ -12,7 +11,7 @@ import (
 )
 
 type AccountProfileRepo struct {
-	conn              *pgx.Conn
+	Repo
 	oculusProfileRepo *OculusProfileRepo
 	steamProfileRepo  *SteamProfileRepo
 }
@@ -23,24 +22,22 @@ func NewAccountProfileRepo(
 	steamProfileRepo *SteamProfileRepo,
 ) *AccountProfileRepo {
 	return &AccountProfileRepo{
-		conn:              conn,
+		Repo: Repo{
+			Conn: conn,
+			TblMetadata: TableMetadata{
+				Name: "account_profiles",
+				Cols: []string{"username", "created_at", "is_verified", "is_banned", "is_staff", "steam_profile_id", "oculus_profile_id"},
+				PK:   "username",
+			},
+		},
 		oculusProfileRepo: oculusProfileRepo,
 		steamProfileRepo:  steamProfileRepo,
 	}
 }
 
-func (repo *AccountProfileRepo) getMetadata() *db.TableMetadata {
-	return &db.TableMetadata{
-		Name: "account_profiles",
-		Cols: []string{"username", "created_at", "is_verified", "is_banned", "is_staff", "steam_profile_id", "oculus_profile_id"},
-		PK:   "username",
-	}
-}
-
 func (repo *AccountProfileRepo) findBy(cond string, args ...interface{}) *[]bs.AccountProfile {
-	md := repo.getMetadata()
-	sql := md.GetFindBySql(cond)
-	rows, err := repo.conn.Query(context.Background(), sql, args...)
+	sql := repo.TblMetadata.GetFindBySql(cond)
+	rows, err := repo.Conn.Query(context.Background(), sql, args...)
 	if err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
@@ -74,14 +71,14 @@ func (repo *AccountProfileRepo) findBy(cond string, args ...interface{}) *[]bs.A
 			oculusProfilesIds = append(oculusProfilesIds, p.OculusProfileId.String)
 		}
 	}
-	oculusProfiles := repo.oculusProfileRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(oculusProfilesIds)), oculusProfilesIds...)
+	oculusProfiles := repo.oculusProfileRepo.findBy(fmt.Sprintf("id IN(%s)", repo.TblMetadata.SqlParamsFrom(oculusProfilesIds)), oculusProfilesIds...)
 	oculusProfilesById := make(map[string]*bs.OculusProfile)
 	for i := range *oculusProfiles {
 		profile := &(*oculusProfiles)[i]
 		oculusProfilesById[profile.Id] = profile
 	}
 
-	steamProfiles := repo.steamProfileRepo.findBy(fmt.Sprintf("id IN(%s)", md.Params2(steamProfilesIds)), steamProfilesIds...)
+	steamProfiles := repo.steamProfileRepo.FindBy(fmt.Sprintf("id IN(%s)", repo.TblMetadata.SqlParamsFrom(steamProfilesIds)), steamProfilesIds...)
 	steamProfilesById := make(map[string]*bs.SteamProfile)
 	for i := range *steamProfiles {
 		profile := &(*steamProfiles)[i]
@@ -101,7 +98,6 @@ func (repo *AccountProfileRepo) findBy(cond string, args ...interface{}) *[]bs.A
 }
 
 func (repo *AccountProfileRepo) Upsert(profiles *[]bs.AccountProfile) {
-	md := repo.getMetadata()
 	batch := &pgx.Batch{}
 	for _, p := range *profiles {
 		var steamId interface{}
@@ -117,12 +113,12 @@ func (repo *AccountProfileRepo) Upsert(profiles *[]bs.AccountProfile) {
 			oculusId = p.OculusProfile.Id
 		}
 		batch.Queue(
-			md.GetUpsertSql(),
+			repo.TblMetadata.GetUpsertSql(),
 			p.Username, p.CreatedAt, p.IsVerified, p.IsBanned, p.IsStaff, steamId, oculusId,
 		)
 	}
 
-	br := repo.conn.SendBatch(context.Background(), batch)
+	br := repo.Conn.SendBatch(context.Background(), batch)
 	defer br.Close()
 	_, err := br.Exec()
 	if err != nil {

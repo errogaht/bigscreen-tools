@@ -1,4 +1,4 @@
-package db
+package repo
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ func (m *TableMetadata) Comma() string {
 }
 
 func (m *TableMetadata) GetUpsertSql() string {
-	return fmt.Sprintf("insert into %s (%s) values(%s) on conflict (%s) do update set %s", m.Name, m.Comma(), m.Params(), m.PK, m.DoUpdate())
+	return fmt.Sprintf("insert into %s (%s) values(%s) on conflict (%s) do update set %s", m.Name, m.Comma(), m.SqlParams(), m.PK, m.DoUpdateSqlPart())
 }
 
 func (m *TableMetadata) GetFindBySql(cond string) (sql string) {
@@ -38,7 +38,7 @@ func (m *TableMetadata) GetINPreparedString(p []string) (str string) {
 	return
 }
 
-func (m *TableMetadata) Params() string {
+func (m *TableMetadata) SqlParams() string {
 	params := make([]string, len(m.Cols))
 	for i, _ := range m.Cols {
 		params[i] = "$" + strconv.Itoa(i+1)
@@ -46,14 +46,15 @@ func (m *TableMetadata) Params() string {
 	return strings.Join(params, ", ")
 }
 
-func (m *TableMetadata) Params2(par []interface{}) string {
+func (m *TableMetadata) SqlParamsFrom(par []interface{}) string {
 	params := make([]string, len(par))
 	for i, _ := range par {
 		params[i] = "$" + strconv.Itoa(i+1)
 	}
 	return strings.Join(params, ", ")
 }
-func (m *TableMetadata) DoUpdate() string {
+
+func (m *TableMetadata) DoUpdateSqlPart() string {
 	var params []string
 	for _, col := range m.Cols {
 		if col == m.PK {

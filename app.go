@@ -123,7 +123,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 
 	conn := NewConn()
 	defer conn.Close(context.Background())
-	settingsRepo := repo.SettingsRepo{Conn: conn}
+	settingsRepo := InitializeSettingsRepo()
 	roomsRepo := InitializeRoomRepo()
 
 	menuKeyboard := tgbotapi.NewReplyKeyboard(
@@ -133,6 +133,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 			tgbotapi.NewKeyboardButton("/movies"),
 			tgbotapi.NewKeyboardButton("/gaming"),
 			tgbotapi.NewKeyboardButton("/nsfw"),
+			tgbotapi.NewKeyboardButton("/sports"),
 		),
 	)
 	for update := range updates {
@@ -153,19 +154,22 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 			bot.Send(msg)
 		case "all":
 			rooms := roomsRepo.FindBy("")
-			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		case "chat":
 			rooms := roomsRepo.FindBy("category = $1", "CHAT")
-			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		case "movies":
 			rooms := roomsRepo.FindBy("category = $1", "MOVIES")
-			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		case "gaming":
 			rooms := roomsRepo.FindBy("category = $1", "GAMING")
-			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
+		case "sports":
+			rooms := roomsRepo.FindBy("category = $1", "SPORTS")
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		case "nsfw":
 			rooms := roomsRepo.FindBy("category = $1", "NSFW")
-			sendTgRoomsMessages(rooms, bgCtxRef, &settingsRepo, &update, bot)
+			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		default:
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I don't know that command")
 			bot.Send(msg)
