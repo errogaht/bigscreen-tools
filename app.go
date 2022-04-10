@@ -151,6 +151,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 		case "start":
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I understand /all, /chat, /movies, /gaming, /nsfw")
 			msg.ReplyMarkup = menuKeyboard
+			msg.DisableNotification = true
 			bot.Send(msg)
 		case "all":
 			rooms := roomsRepo.FindBy("")
@@ -172,6 +173,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
 		default:
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I don't know that command")
+			msg.DisableNotification = true
 			bot.Send(msg)
 		}
 	}
@@ -185,6 +187,7 @@ func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo 
 		msgText := "No rooms found.\n"
 		msgText += lastUpdated
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+		msg.DisableNotification = true
 		bot.Send(msg)
 		return
 	}
@@ -206,6 +209,7 @@ func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo 
 	}
 	for i := range messages {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, messages[i])
+		msg.DisableNotification = true
 		bot.Send(msg)
 	}
 }
