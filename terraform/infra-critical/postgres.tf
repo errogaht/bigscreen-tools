@@ -2,20 +2,13 @@ resource "docker_image" "postgres" {
   name = "postgres:14.2"
 }
 
-resource "docker_network" "web" {
-  name = "web"
-  internal = false
-
-}
-
-resource "docker_network" "internal" {
-  name = "internal"
-  internal = true
-}
 resource "docker_container" "postgres" {
   image = docker_image.postgres.latest
   name  = "postgres"
   restart = "always"
+  networks_advanced {
+    name = docker_network.private.name
+  }
   ports {
     internal = 5432
     external = 5432
@@ -32,5 +25,5 @@ resource "docker_container" "postgres" {
     label = "traefik.enable"
     value = "false"
   }
-  env = ["POSTGRES_USER=root", "POSTGRES_PASSWORD=secret"]
+  env = ["POSTGRES_USER=root", "POSTGRES_PASSWORD=${var.dbPassword}"]
 }

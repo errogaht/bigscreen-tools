@@ -8,7 +8,6 @@ resource "docker_image" "roomloop" {
 
 resource "docker_container" "roomloop" {
   count = 1
-  depends_on = [docker_container.postgres]
   image = docker_image.roomloop.latest
   name  = "roomloop"
   restart = "always"
@@ -28,7 +27,6 @@ resource "docker_container" "roomloop" {
 
 resource "docker_container" "tgwebhook" {
   count = 1
-  depends_on = [docker_container.postgres]
   image = docker_image.roomloop.latest
   name  = "tgwebhook"
   restart = "always"
@@ -50,16 +48,29 @@ resource "docker_container" "tgwebhook" {
     label = "traefik.http.routers.tghook.tls"
     value = "true"
   }
+}
+
+resource "docker_container" "tgwebhook2_bsvrBot" {
+  count = 1
+  image = docker_image.roomloop.latest
+  name  = "tgwebhook-bsvrBot"
+  restart = "always"
+  volumes {
+    host_path = "${var.srvHomeDir}/app/.env_bsvrBot"
+    container_path = "/.env"
+  }
+  volumes {
+    host_path = "${var.srvHomeDir}/pgsock"
+    container_path = "${var.srvHomeDir}/pgsock"
+  }
+  entrypoint = ["/roomloop", "tghook"]
+
   labels {
-    label = "traefik.http.routers.tghook.tls.certresolver"
-    value = "default"
+    label = "traefik.http.routers.tghook2.rule"
+    value = "Host(`tgwebhook2.${var.mainHost}`)"
   }
   labels {
-    label = "traefik.http.routers.tghook.tls.domains[0].main"
-    value = var.mainHost
-  }
-  labels {
-    label = "traefik.http.routers.tghook.tls.domains[0].sans"
-    value = "*.${var.mainHost}"
+    label = "traefik.http.routers.tghook2.tls"
+    value = "true"
   }
 }

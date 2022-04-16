@@ -8,3 +8,6 @@ terraform.tfstate.backup
 terraform.tfvars.json
 /tern.conf
 /images/roomloop/roomloop
+/cpp2il_out/
+/terraform/infra/.terraform.tfstate.lock.info
+/terraform/infra-critical/.terraform.tfstate.lock.info

@@ -21,7 +21,7 @@ resource "null_resource" "binary" {
   }
   provisioner "local-exec" {
     working_dir = "./../../../"
-    command = "go build -o images/roomloop/roomloop app.go"
+    command = "go build -o images/roomloop/roomloop github.com/errogaht/bigscreen-tools"
   }
 }
 

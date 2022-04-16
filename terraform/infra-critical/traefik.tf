@@ -1,3 +1,8 @@
+locals {
+  traefik_dynamic_conf = templatefile("traefik-dynamic-conf.yml", {
+    certs = local.certs
+  })
+}
 resource "ssh_resource" "traefik_init" {
   host     = var.sshHost
   port     = var.sshPort
@@ -7,7 +12,7 @@ resource "ssh_resource" "traefik_init" {
   commands = [
     "mkdir -p ${var.srvHomeDir}/registry/",
     "echo '${file("${path.module}/traefik.yml")}' > ${var.srvHomeDir}/traefik.yml",
-
+    "echo '${local.traefik_dynamic_conf}' > ${var.srvHomeDir}/traefik-dynamic-conf/traefik.yml",
   ]
 }
 resource "docker_image" "traefik" {
@@ -18,9 +23,11 @@ resource "docker_container" "traefik" {
   image      = docker_image.traefik.latest
   name       = "traefik"
   restart    = "always"
-  ports {
-    internal = 8080
-    external = 8080
+  networks_advanced {
+    name = "bridge"
+  }
+  networks_advanced {
+    name = docker_network.private.name
   }
   ports {
     internal = 80
@@ -38,10 +45,35 @@ resource "docker_container" "traefik" {
     host_path      = "${var.srvHomeDir}/traefik.yml"
     container_path = "/etc/traefik/traefik.yml"
   }
+  volumes {
+    host_path      = "${var.srvHomeDir}/traefik-dynamic-conf"
+    container_path = "/traefik-dynamic-conf"
+  }
+
+  volumes {
+    host_path = "${var.srvHomeDir}/certs"
+    container_path = "/certs"
+  }
 
   env = [
     "SELECTEL_API_TOKEN=${var.selectelToken}",
   ]
+  labels {
+    label = "traefik.http.routers.traefik.rule"
+    value = "Host(`traefik.${var.mainHost}`) && ClientIP(`${var.vpnIP}/32`)"
+  }
+  labels {
+    label = "traefik.http.routers.traefik.service"
+    value = "api@internal"
+  }
+  labels {
+    label = "traefik.http.routers.traefik.entrypoints"
+    value = "websecure"
+  }
+  labels {
+    label = "traefik.http.routers.traefik.tls"
+    value = "true"
+  }
 }
 
 resource "docker_image" "whoami" {
@@ -57,17 +89,5 @@ resource "docker_container" "whoami" {
   labels {
     label = "traefik.http.routers.whoami.tls"
     value = "true"
-  }
-  labels {
-    label = "traefik.http.routers.whoami.tls.certresolver"
-    value = "default"
-  }
-  labels {
-    label = "traefik.http.routers.whoami.tls.domains[0].main"
-    value = var.mainHost
-  }
-  labels {
-    label = "traefik.http.routers.whoami.tls.domains[0].sans"
-    value = "*.${var.mainHost}"
   }
 }

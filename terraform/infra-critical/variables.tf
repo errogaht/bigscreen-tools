@@ -1,6 +1,5 @@
 variable "selectelToken" {
   type = string
-  description = "selectel DNS api token"
 }
 variable "registryUsername" {
   type = string
@@ -10,7 +9,12 @@ variable "registryPassword" {
   type = string
   sensitive = true
 }
-
+variable "acmeEmail" {
+  type = string
+}
+variable "dbPassword" {
+  type = string
+}
 variable "sshHost" {
   type = string
   sensitive = true
@@ -25,18 +29,11 @@ variable "vpnIP" {
 }
 variable "registryHost" {
   type = string
-  sensitive = true
 }
 variable "srvHomeDir" {
   type = string
 }
 variable "monicaSecret" {
-  type = string
-}
-variable "dbPassword" {
-  type = string
-}
-variable "acmeEmail" {
   type = string
 }
 variable "monicaHashSalt" {
