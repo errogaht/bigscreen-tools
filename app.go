@@ -56,9 +56,10 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 		rooms = bigscreen.GetRooms()
 		common.LogM(fmt.Sprintf("got %d rooms", len(rooms)))
 
+		//i've stuck here because can't achieve stable working GET /rooms/room:id endpoint, i got 500...
+		//need to continue hacking bigscreen... everything is ready, just find how to make requests there
 		//for i := range rooms {
-		//	room := &rooms[i]
-		//	rooms[i] = bigscreen.GetRoom(room.Id)
+		//	rooms[i] = bigscreen.GetRoom(rooms[i].Id)
 		//}
 
 		//debug(rooms)
@@ -68,13 +69,7 @@ func roomLoop(bigscreen *bs.Bigscreen) {
 	}
 }
 func main() {
-	/*conn := NewConn()
-	defer conn.Close(context.Background())
-	roomsRepo := InitializeRoomRepo()
-	rooms := roomsRepo.FindBy("category = $1", "GAMING")
-	rooms = roomsRepo.FindBy("category = $1", "CHAT")
 
-	debug(rooms)*/
 	bigscreen := &(bs.Bigscreen{
 		JWT: bs.JWTToken{
 			Refresh: os.Getenv("BS_JWT_REFRESH"),
@@ -90,6 +85,20 @@ func main() {
 		},
 		DeviceInfo: fmt.Sprintf(`{"deviceUniqueIdentifier":"%s","drmSystem":"","version":"0.903.19.f05e4d-beta-class-beta","deviceName":"Oculus Quest 2","deviceModel":"Oculus Quest","operatingSystem":"Android OS 10 / API-29 (QQ3A.200805.001/22310100587300000)","CPU":"ARM64 FP ASIMD AES","memory":5842,"GPU":"Adreno (TM) 650"}`, os.Getenv("BS_DEVICE_ID")),
 	})
+
+	/*conn := NewConn()
+	defer conn.Close(context.Background())
+	roomsRepo := InitializeRoomRepo()
+	//rooms := roomsRepo.FindBy("")
+	rooms := bigscreen.GetRooms()
+	roomsRepo.RefreshRoomsInDB(&rooms)
+	bigscreen.Verify()
+	for i := range rooms {
+		room := &rooms[i]
+		rooms[i] = bigscreen.GetRoom(room.Id)
+	}
+	debug(rooms)*/
+
 	args := os.Args[1:]
 	var command string
 	if len(args) == 0 {
@@ -182,7 +191,7 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo *repo.SettingsRepo, update *tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	msgLimit := 4096
 	var messages []string
-	lastUpdated := fmt.Sprintf("Last updated %v ago", time.Now().Sub(settingsRepo.Find(repo.SETTING_ROOMS_LAST_UPDATED).Timestamp))
+	lastUpdated := fmt.Sprintf("Last updated %.0fs ago", time.Now().Sub(settingsRepo.Find(repo.SETTING_ROOMS_LAST_UPDATED).Timestamp).Seconds())
 	if len(*rooms) == 0 {
 		msgText := "No rooms found.\n"
 		msgText += lastUpdated
@@ -213,52 +222,3 @@ func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo 
 		bot.Send(msg)
 	}
 }
-
-/*func getMessageTgLoop(tgCtxRef *tg.Context, bgCtxRef *bs.Bigscreen) {
-	tgCtx := *tgCtxRef
-
-	bot, err := tgbotapi.NewBotAPI(tgCtx.Token)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	bot.Debug = true
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	u := tgbotapi.NewUpdate(0)
-
-	updates := bot.GetUpdatesChan(u)
-	msgLimit := 4096
-	var messages []string
-	for update := range updates {
-		if update.Message != nil { // If we got a message
-			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-			if update.Message.Text == "rooms" {
-
-			}
-
-			roomsText := bgCtxRef.GetOnlineRooms()
-
-			if len(roomsText) > msgLimit {
-				lines := strings.Split(roomsText, "\n")
-				var buf string
-				for _, line := range lines {
-					if len(buf+line) > msgLimit {
-						messages = append(messages, buf)
-						buf = ""
-					}
-					buf += line
-				}
-				messages = append(messages, buf)
-			} else {
-				messages = append(messages, roomsText)
-			}
-			for _, message := range messages {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
-				bot.Send(msg)
-			}
-		}
-	}
-}
-*/

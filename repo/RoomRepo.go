@@ -18,6 +18,7 @@ type RoomRepo struct {
 	accountProfileRepo *AccountProfileRepo
 	oculusProfilesRepo *OculusProfileRepo
 	steamProfilesRepo  *SteamProfileRepo
+	roomUsersRepo      *RoomUsersRepo
 	settingsRepo       *SettingsRepo
 }
 
@@ -26,6 +27,7 @@ func NewRoomRepo(
 	accountProfileRepo *AccountProfileRepo,
 	oculusProfilesRepo *OculusProfileRepo,
 	steamProfilesRepo *SteamProfileRepo,
+	roomUsersRepo *RoomUsersRepo,
 	settingsRepo *SettingsRepo,
 ) *RoomRepo {
 	return &RoomRepo{
@@ -41,6 +43,7 @@ func NewRoomRepo(
 		oculusProfilesRepo: oculusProfilesRepo,
 		steamProfilesRepo:  steamProfilesRepo,
 		settingsRepo:       settingsRepo,
+		roomUsersRepo:      roomUsersRepo,
 	}
 }
 
@@ -55,10 +58,15 @@ func (repo *RoomRepo) RefreshRoomsInDB(rooms *[]bs.Room) {
 	repo.steamProfilesRepo.Upsert(&steamProfiles)
 	common.LogM(fmt.Sprintf("%d steamProfiles upsert", len(steamProfiles)))
 
-	creatorProfiles := bs.GetCreatorProfilesFrom(rooms)
+	creatorProfiles := bs.GetAccountProfilesFrom(rooms)
 	repo.accountProfileRepo.Upsert(&creatorProfiles)
 
-	repo.DeleteAll()
+	roomUsers := bs.GetRoomUsersFrom(rooms)
+	repo.roomUsersRepo.DeleteAll() //live list of room users
+	repo.roomUsersRepo.Upsert(&roomUsers)
+	common.LogM(fmt.Sprintf("%d roomUsers refreshed", len(roomUsers)))
+
+	repo.DeleteAll() //live list of rooms
 	repo.Insert(rooms)
 	repo.settingsRepo.Upsert(&[]s.Settings{{Id: SETTING_ROOMS_LAST_UPDATED, Timestamp: time.Now()}})
 	common.LogM(fmt.Sprintf("rooms refreshed, 30s. sleep..."))
@@ -74,8 +82,9 @@ func (repo *RoomRepo) FindBy(cond string, args ...interface{}) *[]bs.Room {
 	}
 	defer rows.Close()
 
-	var rowSlice []bs.Room
+	var rooms []bs.Room
 	var accProfilesIds []interface{}
+	var roomIds []interface{}
 	var creatorProfileUsername sql2.NullString
 	for rows.Next() {
 		var r bs.Room
@@ -89,31 +98,63 @@ func (repo *RoomRepo) FindBy(cond string, args ...interface{}) *[]bs.Room {
 			r.CreatorProfileUsername = creatorProfileUsername.String
 			accProfilesIds = append(accProfilesIds, r.CreatorProfileUsername)
 		}
-		rowSlice = append(rowSlice, r)
+		roomIds = append(roomIds, r.RoomId)
+		rooms = append(rooms, r)
 	}
 	if err := rows.Err(); err != nil {
 		fmt.Printf("%v\n", sql)
 		fmt.Printf("%v\n", args)
 		log.Fatal(err)
 	}
-	if len(rowSlice) == 0 {
+	if len(rooms) == 0 {
 		null := make([]bs.Room, 0)
 		return &null
 	}
 
+	roomUsers := repo.roomUsersRepo.FindBy(fmt.Sprintf("room_id IN(%s)", repo.TblMetadata.SqlParamsFrom(roomIds)))
+
+	//collect accProfiles from roomUsers to accProfilesIds
+	for i := range *roomUsers {
+		accProfilesIds = append(accProfilesIds, (*roomUsers)[i].AccountProfileId)
+	}
+
+	//get all required accProfiles from DB
 	accProfiles := repo.accountProfileRepo.findBy(fmt.Sprintf("username IN(%s)", repo.TblMetadata.SqlParamsFrom(accProfilesIds)), accProfilesIds...)
-	creatorProfilesById := make(map[string]*bs.AccountProfile)
+
+	//map accProfiles by their ids
+	accountProfilesById := make(map[string]*bs.AccountProfile)
 	for i := range *accProfiles {
 		profile := &(*accProfiles)[i]
-		creatorProfilesById[profile.Username] = profile
+		accountProfilesById[profile.Username] = profile
 	}
-	for i := range rowSlice {
-		r := &rowSlice[i]
-		if profile, ok := creatorProfilesById[r.CreatorProfileUsername]; ok {
+
+	//map slices of roomUsers by roomId they belongs to
+	roomUsersByRId := make(map[string][]bs.RoomUser)
+	for i := range *roomUsers {
+		ru2 := &(*roomUsers)[i]
+
+		//attach accountProfile to roomUser
+		if ap, ok := accountProfilesById[ru2.AccountProfileId]; ok {
+			ru2.AccountProfile = *ap
+		}
+
+		roomUsersByRId[ru2.RoomId] = append(roomUsersByRId[ru2.RoomId], *ru2)
+	}
+
+	for i := range rooms {
+		r := &rooms[i]
+
+		//attach accProfile to room
+		if profile, ok := accountProfilesById[r.CreatorProfileUsername]; ok {
 			r.CreatorProfile = *profile
 		}
+
+		//attach roomUsers to room
+		if roomUsersPack, ok := roomUsersByRId[r.Id]; ok {
+			r.RemoteUsers = roomUsersPack
+		}
 	}
-	return &rowSlice
+	return &rooms
 }
 
 func (repo *RoomRepo) Insert(rooms *[]bs.Room) {

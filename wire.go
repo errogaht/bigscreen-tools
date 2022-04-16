@@ -14,6 +14,7 @@ func InitializeRoomRepo() *repo.RoomRepo {
 		repo.NewSteamProfileRepo,
 		repo.NewOculusProfileRepo,
 		repo.NewSettingsRepo,
+		repo.NewRoomUsersRepo,
 		InitializeAccountProfileRepo,
 	)
 	return &repo.RoomRepo{}
@@ -34,6 +35,14 @@ func InitializeSteamProfileRepo() *repo.SteamProfileRepo {
 		repo.NewSteamProfileRepo,
 	)
 	return &repo.SteamProfileRepo{}
+}
+
+func InitializeRoomUsersRepo() *repo.RoomUsersRepo {
+	wire.Build(
+		NewConn,
+		repo.NewRoomUsersRepo,
+	)
+	return &repo.RoomUsersRepo{}
 }
 
 func InitializeOculusProfileRepo() *repo.OculusProfileRepo {

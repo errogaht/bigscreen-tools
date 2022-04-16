@@ -21,8 +21,9 @@ func InitializeRoomRepo() *repo.RoomRepo {
 	accountProfileRepo := InitializeAccountProfileRepo()
 	oculusProfileRepo := repo.NewOculusProfileRepo(pgxConn)
 	steamProfileRepo := repo.NewSteamProfileRepo(pgxConn)
+	roomUsersRepo := repo.NewRoomUsersRepo(pgxConn)
 	settingsRepo := repo.NewSettingsRepo(pgxConn)
-	roomRepo := repo.NewRoomRepo(pgxConn, accountProfileRepo, oculusProfileRepo, steamProfileRepo, settingsRepo)
+	roomRepo := repo.NewRoomRepo(pgxConn, accountProfileRepo, oculusProfileRepo, steamProfileRepo, roomUsersRepo, settingsRepo)
 	return roomRepo
 }
 
@@ -38,6 +39,12 @@ func InitializeSteamProfileRepo() *repo.SteamProfileRepo {
 	pgxConn := NewConn()
 	steamProfileRepo := repo.NewSteamProfileRepo(pgxConn)
 	return steamProfileRepo
+}
+
+func InitializeRoomUsersRepo() *repo.RoomUsersRepo {
+	pgxConn := NewConn()
+	roomUsersRepo := repo.NewRoomUsersRepo(pgxConn)
+	return roomUsersRepo
 }
 
 func InitializeOculusProfileRepo() *repo.OculusProfileRepo {

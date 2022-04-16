@@ -12,15 +12,34 @@ type Bigscreen struct {
 	TgToken      string
 }
 
-func GetCreatorProfilesFrom(rooms *[]Room) (profiles []AccountProfile) {
+func GetAccountProfilesFrom(rooms *[]Room) (profiles []AccountProfile) {
 	profilesSet := make(map[string]struct{})
 	for i := range *rooms {
 		p := &(*rooms)[i].CreatorProfile
-		if _, ok := profilesSet[p.Username]; ok {
-			continue
+
+		appendAccountProfile(p, &profilesSet, &profiles)
+		for i2 := range (*rooms)[i].RemoteUsers {
+			p = &(*rooms)[i].RemoteUsers[i2].AccountProfile
+			appendAccountProfile(p, &profilesSet, &profiles)
 		}
-		profilesSet[p.Username] = struct{}{}
-		profiles = append(profiles, *p)
+	}
+	return
+}
+
+func GetRoomUsersFrom(rooms *[]Room) (roomUsers []RoomUser) {
+	ruSet := make(map[string]struct{})
+	for i := range *rooms {
+		for i2 := range (*rooms)[i].RemoteUsers {
+			p := &(*rooms)[i].RemoteUsers[i2]
+
+			if _, ok := ruSet[p.UserSessionId]; ok {
+				return
+			}
+			ruSet[p.UserSessionId] = struct{}{}
+			p.AccountProfileId = p.AccountProfile.Username
+			p.RoomId = (*rooms)[i].RoomId
+			roomUsers = append(roomUsers, *p)
+		}
 	}
 	return
 }
@@ -30,30 +49,54 @@ func GetOculusProfilesFrom(rooms *[]Room) (profiles []OculusProfile) {
 	var p *OculusProfile
 	for i := range *rooms {
 		p = &(*rooms)[i].CreatorProfile.OculusProfile
-		if p.Id == "" {
-			continue
+		appendOculusProfile(p, &profilesSet, &profiles)
+		for i2 := range (*rooms)[i].RemoteUsers {
+			p = &(*rooms)[i].RemoteUsers[i2].AccountProfile.OculusProfile
+			appendOculusProfile(p, &profilesSet, &profiles)
 		}
-		if _, ok := profilesSet[p.Id]; ok {
-			continue
-		}
-		profilesSet[p.Id] = struct{}{}
-		profiles = append(profiles, *p)
 	}
 	return
+}
+
+func appendOculusProfile(p *OculusProfile, profilesSet *map[string]struct{}, profiles *[]OculusProfile) {
+	if p.Id == "" {
+		return
+	}
+	if _, ok := (*profilesSet)[p.Id]; ok {
+		return
+	}
+	(*profilesSet)[p.Id] = struct{}{}
+	*profiles = append(*profiles, *p)
+}
+
+func appendAccountProfile(p *AccountProfile, profilesSet *map[string]struct{}, profiles *[]AccountProfile) {
+	if _, ok := (*profilesSet)[p.Username]; ok {
+		return
+	}
+	(*profilesSet)[p.Username] = struct{}{}
+	*profiles = append(*profiles, *p)
+}
+
+func appendSteamProfile(p *SteamProfile, profilesSet *map[string]struct{}, profiles *[]SteamProfile) {
+	if p.Id == "" {
+		return
+	}
+	if _, ok := (*profilesSet)[p.Id]; ok {
+		return
+	}
+	(*profilesSet)[p.Id] = struct{}{}
+	*profiles = append(*profiles, *p)
 }
 
 func GetSteamProfilesFrom(rooms *[]Room) (profiles []SteamProfile) {
 	profilesSet := make(map[string]struct{})
 	for i := range *rooms {
 		p := &(*rooms)[i].CreatorProfile.SteamProfile
-		if p.Id == "" {
-			continue
+		appendSteamProfile(p, &profilesSet, &profiles)
+		for i2 := range (*rooms)[i].RemoteUsers {
+			p = &(*rooms)[i].RemoteUsers[i2].AccountProfile.SteamProfile
+			appendSteamProfile(p, &profilesSet, &profiles)
 		}
-		if _, ok := profilesSet[p.Id]; ok {
-			continue
-		}
-		profilesSet[p.Id] = struct{}{}
-		profiles = append(profiles, *p)
 	}
 	return
 }

@@ -58,15 +58,17 @@ type SteamProfile struct {
 	LocCountryCode           string `json:"loccountrycode"`
 }
 type RoomUser struct {
-	IsAdmin        bool
-	IsMod          bool
-	IsStaff        bool
-	Version        string
-	UserSessionId  string
-	LegacyUserId   string
-	SeatIndex      uint8
-	CreatedAt      time.Time
-	AccountProfile AccountProfile
+	IsAdmin          bool   `db:"is_admin"`
+	IsMod            bool   `db:"is_mod"`
+	IsStaff          bool   `db:"is_staff"`
+	Version          string `db:"version"`
+	UserSessionId    string `db:"user_session_id"`
+	LegacyUserId     string
+	RoomId           string    `db:"room_id"`
+	SeatIndex        uint8     `db:"seat_index"`
+	CreatedAt        time.Time `db:"created_at"`
+	AccountProfileId string    `db:"account_profile"`
+	AccountProfile   AccountProfile
 }
 type Room struct {
 	Creator                RoomCreator
