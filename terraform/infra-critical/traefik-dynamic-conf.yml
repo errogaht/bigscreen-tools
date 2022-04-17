@@ -1,6 +1,0 @@
-tls:
-  certificates:
-  %{ for cert in certs }
-    - certFile: /certs/${cert}.pem
-      keyFile: /certs/${cert}.key
-  %{ endfor }
