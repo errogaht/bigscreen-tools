@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/errogaht/bigscreen-tools/bs"
 	"github.com/errogaht/bigscreen-tools/common"
 	"github.com/errogaht/bigscreen-tools/repo"
+	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v4"
 	_ "github.com/joho/godotenv/autoload"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -113,9 +116,57 @@ func main() {
 		roomLoop(bigscreen)
 	case "tghook":
 		tgHook(bigscreen)
+	case "tgwebapp":
+		tgWebapp(bigscreen)
 	case "exit":
 		os.Exit(0)
 	}
+}
+
+func tgWebapp(bgCtxRef *bs.Bigscreen) {
+	router := gin.Default()
+	router.LoadHTMLGlob("templates/*")
+	//router.LoadHTMLFiles("templates/template1.html", "templates/template2.html")
+	router.GET("/tgwebapp", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "tgwebapp.html", gin.H{
+			"title": "Main website",
+		})
+	})
+	router.Run("0.0.0.0:8080")
+}
+
+type WebApp struct {
+	URL string `json:"url"`
+}
+type InlineKeyboard struct {
+	Text   string `json:"text"`
+	WebApp WebApp `json:"web_app"`
+}
+type InlineKeyboardMarkup struct {
+	InlineKeyboard [][]InlineKeyboard `json:"inline_keyboard"`
+}
+
+func formatAsDate(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05 MST")
+}
+
+func getAvatarUrl(p bs.AccountProfile) string {
+	if p.OculusProfile.Id != "" {
+		if p.OculusProfile.SmallImageURL != "" {
+			return p.OculusProfile.SmallImageURL
+		}
+		if p.OculusProfile.ImageURL != "" {
+			return p.OculusProfile.ImageURL
+		}
+	}
+
+	if p.SteamProfile.Id != "" {
+		if p.SteamProfile.Avatar != "" {
+			return p.SteamProfile.Avatar
+		}
+	}
+
+	return ""
 }
 
 func tgHook(bgCtxRef *bs.Bigscreen) {
@@ -126,9 +177,6 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	updates := bot.ListenForWebhook(os.Getenv("TG_WEBHOOK_ROUTE"))
-	go http.ListenAndServe("0.0.0.0:8080", nil)
 
 	conn := NewConn()
 	defer conn.Close(context.Background())
@@ -145,48 +193,95 @@ func tgHook(bgCtxRef *bs.Bigscreen) {
 			tgbotapi.NewKeyboardButton("/sports"),
 		),
 	)
-	for update := range updates {
-		if update.Message == nil { // ignore any non-Message updates
-			continue
+
+	router := gin.Default()
+	router.SetFuncMap(template.FuncMap{
+		"formatAsDate": formatAsDate,
+		"getAvatarUrl": getAvatarUrl,
+	})
+	router.LoadHTMLGlob("templates/*")
+	router.Static("/assets", "./assets")
+
+	router.GET("/tgwebapp", func(c *gin.Context) {
+		rooms := roomsRepo.FindBy("")
+		marshal, err := json.Marshal(rooms)
+		if err != nil {
+			return
 		}
+		c.HTML(http.StatusOK, "bootstrap.gohtml", gin.H{
+			"Rooms":     rooms,
+			"roomsJson": template.JS(marshal),
+		})
+	})
+	router.POST(os.Getenv("TG_WEBHOOK_ROUTE"), func(c *gin.Context) {
+		update, err := bot.HandleUpdate(c.Request)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+		} else if update.Message == nil {
+			c.JSON(200, gin.H{})
+		} else if !update.Message.IsCommand() {
+			c.JSON(200, gin.H{})
+		} else {
+			switch update.Message.Command() {
 
-		if !update.Message.IsCommand() {
-			continue
+			case "help":
+			case "start":
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I understand /menu, /all, /chat, /movies, /gaming, /nsfw, /sports")
+				msg.ReplyMarkup = menuKeyboard
+				msg.DisableNotification = true
+				bot.Send(msg)
+			case "all":
+				rooms := roomsRepo.FindBy("")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "chat":
+				rooms := roomsRepo.FindBy("category = $1", "CHAT")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "movies":
+				rooms := roomsRepo.FindBy("category = $1", "MOVIES")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "gaming":
+				rooms := roomsRepo.FindBy("category = $1", "GAMING")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "sports":
+				rooms := roomsRepo.FindBy("category = $1", "SPORTS")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "nsfw":
+				rooms := roomsRepo.FindBy("category = $1", "NSFW")
+				sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, update, bot)
+			case "menu":
+				chat := update.FromChat()
+				if !chat.IsPrivate() {
+					msg := tgbotapi.NewMessage(
+						update.Message.Chat.ID,
+						fmt.Sprintf("This cool, convenient menu works only in private chats. Open chat with me @%s and enjoy the feature!", bot.Self.UserName),
+					)
+					msg.DisableNotification = true
+					bot.Send(msg)
+				} else {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Press button bellow")
+					msg.DisableNotification = true
+					msg.ReplyMarkup = InlineKeyboardMarkup{
+						InlineKeyboard: [][]InlineKeyboard{
+							{InlineKeyboard{
+								Text:   "Open menu",
+								WebApp: WebApp{URL: "https://xxx/yyy"},
+							}},
+						},
+					}
+					bot.Send(msg)
+				}
+			default:
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I don't know that command")
+				msg.DisableNotification = true
+				bot.Send(msg)
+			}
+
+			c.JSON(200, gin.H{})
 		}
-
-		switch update.Message.Command() {
-
-		case "help":
-		case "start":
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I understand /all, /chat, /movies, /gaming, /nsfw")
-			msg.ReplyMarkup = menuKeyboard
-			msg.DisableNotification = true
-			bot.Send(msg)
-		case "all":
-			rooms := roomsRepo.FindBy("")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		case "chat":
-			rooms := roomsRepo.FindBy("category = $1", "CHAT")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		case "movies":
-			rooms := roomsRepo.FindBy("category = $1", "MOVIES")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		case "gaming":
-			rooms := roomsRepo.FindBy("category = $1", "GAMING")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		case "sports":
-			rooms := roomsRepo.FindBy("category = $1", "SPORTS")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		case "nsfw":
-			rooms := roomsRepo.FindBy("category = $1", "NSFW")
-			sendTgRoomsMessages(rooms, bgCtxRef, settingsRepo, &update, bot)
-		default:
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "I don't know that command")
-			msg.DisableNotification = true
-			bot.Send(msg)
-		}
-	}
-
+	})
+	router.Run("0.0.0.0:8080")
 }
 func sendTgRoomsMessages(rooms *[]bs.Room, bgCtxRef *bs.Bigscreen, settingsRepo *repo.SettingsRepo, update *tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	msgLimit := 4096

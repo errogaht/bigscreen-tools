@@ -6,7 +6,6 @@ import (
 	"gopkg.in/guregu/null.v4"
 	"log"
 	"os"
-	"sort"
 	"strings"
 	"time"
 )
@@ -122,14 +121,6 @@ func getMsgTemplate() string {
 
 func (bsRef *Bigscreen) GetOnlineRoomsText(listOfRoomsRef *[]Room) string {
 	listOfRooms := *listOfRoomsRef
-
-	sort.SliceStable(listOfRooms, func(i, j int) bool {
-		return listOfRooms[i].Participants > listOfRooms[j].Participants
-	})
-
-	sort.SliceStable(listOfRooms, func(i, j int) bool {
-		return listOfRooms[i].Category < listOfRooms[j].Category
-	})
 
 	var result string
 	//9.   CHAT -  5/15 - Steve's Place 21               | U:Steve_               Music

@@ -1,0 +1,79 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--<script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>-->
+    <link rel="stylesheet" type="text/css" href="/assets/semantic/semantic.css">
+    <!--<script>
+        var vConsole = new window.VConsole();
+        console.log(window.Telegram.WebApp);
+    </script>-->
+    <style>
+        .ui.grid .card {
+            font-size: 2em;
+        }
+        .ui.labels .label, .ui.label {
+            font-size: 1.714286rem;
+        }
+        .ui.grid {
+            padding-top: 2em;
+        }
+    </style>
+</head>
+<body>
+<div class="ui two column doubling stackable grid container">
+    {{range .Rooms }}
+        {{- /*gotype: github.com/errogaht/bigscreen-tools/bs.Room*/ -}}
+        <div class="column">
+            <div class="ui centered fluid card">
+                <div class="content">
+                    <div class="header">{{.Name}}</div>
+                    <div class="meta">
+                        <span class="date">{{.Description}}</span>
+                    </div>
+                    <div class="description">
+                        <div class="ui labels">
+                            <div class="ui teal label">
+                                <i class="users icon"></i>
+                                {{.Participants}}/{{.Size}}
+                            </div>
+                            <div class="ui blue label">
+                                {{.InviteCode}}
+                                <div class="detail">code</div>
+                            </div>
+                            <div class="ui violet label">
+                                {{.Environment}}
+                                <div class="detail">env</div>
+                            </div>
+                            <div class="ui label">
+                                {{.CreatedAt|formatAsDate}}
+                                <div class="detail">created</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="extra content">
+                        <span>
+                            <div class="ui image label">
+                              {{if .CreatorProfile.OculusProfile.Id}}
+                                <img src="{{.CreatorProfile.OculusProfile.ImageURL}}">
+                              {{else}}
+                                <img src="{{.CreatorProfile.SteamProfile.Avatar}}">
+                              {{end}}
+                              {{.CreatorProfile.Username}}
+                            </div>
+                        </span>
+                    <span  class="right floated">
+                            <div class="ui label">{{.Category}}</div>
+                        </span>
+                </div>
+            </div>
+        </div>
+    {{end}}
+</div>
+
+</body>
+</html>

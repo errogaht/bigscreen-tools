@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.1/dist/css/bootstrap.min.css" integrity="sha384-zCbKRCUGaJDkqS1kPbPd7TveP5iyJE0EjAuZQTgFLD2ylzuqKfdKlfG/eSrtxUkn" crossorigin="anonymous">
+    <script src="https://unpkg.com/vue@3"></script>
+</head>
+<body>
+<div id="app">
+    <div class="container my-4">
+        <div class="row mb-4">
+            <div class="col-xs-12 ml-3">
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn" @click="roomFilter = 'All'" :class="roomFilter === 'All' ? 'btn-primary' : 'btn-secondary'">All <span class="badge badge-light">${totalRooms('All')}</span></button>
+                    <button type="button" class="btn" @click="roomFilter = 'CHAT'" :class="roomFilter === 'CHAT'  ? 'btn-primary' : 'btn-secondary'">Chat <span class="badge badge-light">${totalRooms('CHAT')}</span></button>
+                    <button type="button" class="btn" @click="roomFilter = 'MOVIES'" :class="roomFilter === 'MOVIES'  ? 'btn-primary' : 'btn-secondary'">Movies <span class="badge badge-light">${totalRooms('MOVIES')}</span></button>
+                    <button type="button" class="btn" @click="roomFilter = 'NSFW'" :class="roomFilter === 'NSFW'  ? 'btn-primary' : 'btn-secondary'">NSFW <span class="badge badge-light">${totalRooms('NSFW')}</span></button>
+                    <button type="button" class="btn" @click="roomFilter = 'SPORTS'" :class="roomFilter === 'SPORTS'  ? 'btn-primary' : 'btn-secondary'">Sports <span class="badge badge-light">${totalRooms('SPORTS')}</span></button>
+                </div>
+            </div>
+        </div>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3">
+            <template v-for="room in rooms">
+                <div class="col mb-4" v-if="room.Category === roomFilter || roomFilter === 'All'">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            ${room.Name}
+                            <span class="float-right badge badge-success">
+                        <svg style="vertical-align: bottom;" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-people-fill" viewBox="0 0 16 16">
+                          <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                          <path fill-rule="evenodd" d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/>
+                          <path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+                        </svg>
+                        ${room.Participants}/${room.Size}
+                    </span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">${room.Description}</p>
+                            <p class="card-text">
+                                <span class="text-muted">Created:</span> ${room.CreatedAt}<br>
+                                <span class="text-muted">Code:</span> ${room.InviteCode}<br>
+                                <span class="text-muted">Env:</span> ${room.Environment}<br>
+                                <span class="badge badge-primary">${room.Category}</span>
+                            </p>
+                        </div>
+                        <div class="card-footer">
+                            <img :src="avatarUrl(room.CreatorProfile)" class="rounded" style="height: 1.4rem">
+                            ${room.CreatorProfile.Username} /
+                            <span v-if="room.CreatorProfile.SteamProfile.steamid">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-steam" viewBox="0 0 16 16">
+                                <path d="M.329 10.333A8.01 8.01 0 0 0 7.99 16C12.414 16 16 12.418 16 8s-3.586-8-8.009-8A8.006 8.006 0 0 0 0 7.468l.003.006 4.304 1.769A2.198 2.198 0 0 1 5.62 8.88l1.96-2.844-.001-.04a3.046 3.046 0 0 1 3.042-3.043 3.046 3.046 0 0 1 3.042 3.043 3.047 3.047 0 0 1-3.111 3.044l-2.804 2a2.223 2.223 0 0 1-3.075 2.11 2.217 2.217 0 0 1-1.312-1.568L.33 10.333Z"/>
+                                <path d="M4.868 12.683a1.715 1.715 0 0 0 1.318-3.165 1.705 1.705 0 0 0-1.263-.02l1.023.424a1.261 1.261 0 1 1-.97 2.33l-.99-.41a1.7 1.7 0 0 0 .882.84Zm3.726-6.687a2.03 2.03 0 0 0 2.027 2.029 2.03 2.03 0 0 0 2.027-2.029 2.03 2.03 0 0 0-2.027-2.027 2.03 2.03 0 0 0-2.027 2.027Zm2.03-1.527a1.524 1.524 0 1 1-.002 3.048 1.524 1.524 0 0 1 .002-3.048Z"/>
+                            </svg>
+                            ${ room.CreatorProfile.SteamProfile.personaname }
+                        </span>
+                            <span v-if="room.CreatorProfile.OculusProfile.oculusId">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"  viewBox="0 0 24 24">
+                                <path d="M2.689,17.605c0.846,0.678,1.815,1.146,2.865,1.4c0.603,0.146,1.206,0.211,1.823,0.229c0.45,0.016,0.9,0.012,1.365,0.012h6.496c0.449,0,0.914,0.004,1.364-0.012c0.615-0.018,1.215-0.082,1.814-0.229c1.05-0.256,2.011-0.723,2.866-1.402C23.01,16.239,24,14.179,24,11.999c0-2.181-0.99-4.241-2.691-5.606c-0.845-0.678-1.812-1.146-2.865-1.398c-0.6-0.146-1.203-0.211-1.822-0.23c-0.449-0.015-0.899-0.01-1.364-0.01H8.76c-0.457,0-0.915-0.005-1.372,0.01C6.77,4.786,6.166,4.848,5.563,4.995c-1.051,0.254-2.025,0.723-2.865,1.4C0.99,7.76,0,9.819,0,11.999C0,14.181,0.99,16.24,2.689,17.605z M5.863,10.047c0.314-0.225,0.674-0.359,1.049-0.42s0.75-0.061,1.141-0.061h7.875c0.375,0,0.765-0.014,1.14,0.046s0.735,0.194,1.051,0.405c0.645,0.434,1.02,1.17,1.02,1.949c0,0.78-0.391,1.5-1.035,1.95l0.031,0.032c-0.319,0.221-0.675,0.355-1.057,0.416c-0.382,0.061-0.761,0.049-1.142,0.049H8.063c-0.382,0-0.762,0.014-1.145-0.049c-0.381-0.063-0.734-0.195-1.057-0.416c-0.643-0.451-1.027-1.17-1.027-1.951C4.834,11.201,5.221,10.482,5.863,10.047z"/>
+                            </svg>
+                            ${room.CreatorProfile.OculusProfile.oculusId}
+                        </span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+    Vue.createApp({
+        data() {
+            return {
+                message: 'Hello Vue!',
+                rooms: {{.roomsJson}},
+                roomFilter: "All"
+            }
+        },
+        methods: {
+            avatarUrl(v) {
+                if (v.OculusProfile.oculusId !== "") {
+                    if (v.OculusProfile.oculusSmallImageURL !== "") {
+                        return v.OculusProfile.oculusSmallImageURL
+                    }
+                    if (v.OculusProfile.oculusImageURL !== "") {
+                        return v.OculusProfile.oculusImageURL
+                    }
+                }
+
+                if (v.SteamProfile.steamid !== "") {
+                    if (v.SteamProfile.avatar !== "") {
+                        return v.SteamProfile.avatar
+                    }
+                }
+
+                return ""
+            },
+            totalRooms(v) {
+                if (v === "All") {
+                    return this.rooms.length;
+                }
+                return this.rooms.filter(i => i.Category === v).length;
+            }
+        },
+        compilerOptions: {
+            delimiters: ["${", "}"]
+        }
+    }).mount('#app')
+</script>
+
+</body>
+</html>

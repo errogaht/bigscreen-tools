@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"log"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -154,6 +155,14 @@ func (repo *RoomRepo) FindBy(cond string, args ...interface{}) *[]bs.Room {
 			r.RemoteUsers = roomUsersPack
 		}
 	}
+
+	sort.SliceStable(rooms, func(i, j int) bool {
+		return rooms[i].Participants > rooms[j].Participants
+	})
+
+	sort.SliceStable(rooms, func(i, j int) bool {
+		return rooms[i].Category < rooms[j].Category
+	})
 	return &rooms
 }
 
