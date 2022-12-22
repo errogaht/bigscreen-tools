@@ -43,7 +43,7 @@ create table account_profiles
 );
 create table rooms
 (
-    id           uuid primary key default gen_random_uuid() not null,
+    id           varchar primary key default gen_random_uuid() not null,
     created_at   timestamp                                  not null,
     participants int                                        not null,
     status       varchar                                    not null,
@@ -63,11 +63,11 @@ create index rooms_category_index
 
 create table room_users
 (
-    user_session_id uuid primary key not null,
+    user_session_id varchar primary key not null,
     seat_index      smallint         not null,
     created_at      timestamp        not null,
     account_profile varchar default null,
-    room_id         uuid    default null,
+    room_id         varchar    default null,
     version         varchar          not null,
     is_staff        boolean          not null,
     is_mod          boolean          not null,

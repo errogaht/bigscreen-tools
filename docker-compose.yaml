@@ -1,7 +1,7 @@
 version: "3.6"
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:14
     restart: always
     ports:
       - "${POSTGRES_LOCAL_PORT}:5432"
@@ -14,4 +14,5 @@ services:
 
 volumes:
   db:
+    external: true
     name: postgres-bigscreen
